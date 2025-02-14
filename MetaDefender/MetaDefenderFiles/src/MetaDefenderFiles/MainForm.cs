@@ -109,7 +109,7 @@ namespace MetaDefenderFiles
                 default:
                     {
                         rbCustom.Checked = true;
-                        tbCustomRule.Text = settings.Rule;
+                        tbCustomRule.Text = settings.CustomRule;
                         break;
                     }
             }
@@ -133,13 +133,15 @@ namespace MetaDefenderFiles
 
             if(rbCustom.Checked)
             {
-                settings.Rule = rbCustom.Text;
+                settings.Rule = "custom";
+                settings.CustomRule = tbCustomRule.Text;
             }
             else
             {
                 MDRule mdRule = GetMDRule();
                 settings.Rule = mdRule.GetRuleString();
             }
+
 
             settings.Serialize();
         }
@@ -236,13 +238,7 @@ namespace MetaDefenderFiles
             {
                 throw new Exception("\"The Server Endpoint needs to be specified.  It should be in the format of \\\"https://%serverAddress%//v4\\\"");
             }
-            else
-            {
-                if (!(serverEndpoint.EndsWith("/v4") || serverEndpoint.EndsWith("/v5")))
-                {
-                    throw new Exception("The Server Endpoint does not appear correct.  It should be in the format of \"https://%serverAddress%//v4\"");
-                }
-            }
+            
         }
 
         private void rbOnPremEndpoint_CheckedChanged(object sender, EventArgs e)
@@ -250,10 +246,22 @@ namespace MetaDefenderFiles
             if (rbOnPremEndpoint.Checked == true)
             {
                 tbServerEndpoint.Enabled = true;
+                rbCDR.Enabled = false;
+                rbDLP.Enabled = false;
+                rbMultiscan.Enabled = false;
+                rbSanitize.Enabled = false;
+                rbCustom.Enabled = true;
+                rbCustom.Checked = true;
             }
             else
             {
                 tbServerEndpoint.Enabled = false;
+                rbCDR.Enabled = true;
+                rbDLP.Enabled = true;
+                rbMultiscan.Enabled = true;
+                rbSanitize.Enabled = true;
+                rbCustom.Enabled = false;
+                rbMultiscan.Checked = true;
             }
         }
 

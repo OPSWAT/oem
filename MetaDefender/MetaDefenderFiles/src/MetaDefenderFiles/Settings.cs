@@ -17,13 +17,14 @@ namespace MetaDefenderFiles
         private string scanFolder;
         private string rule;
         private bool   cloudEndpoint;
+        private string customRule;
 
         public string ServerEndpoint { get => serverEndpoint; set => serverEndpoint = value; }
         public string Apikey { get => apikey; set => apikey = value; }
         public string ScanFolder { get => scanFolder; set => scanFolder = value; }
         public string Rule { get => rule; set => rule = value; }
         public bool CloudEndpoint { get => cloudEndpoint; set => cloudEndpoint = value; }
-
+        public string CustomRule { get => customRule; set => customRule = value; }
 
         public void Serialize()
         {

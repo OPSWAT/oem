@@ -119,8 +119,19 @@ namespace MetaDefenderFiles
 
         private static string FormatJson(string json)
         {
-            dynamic parsedJson = JsonConvert.DeserializeObject(json);
-            return JsonConvert.SerializeObject(parsedJson, Formatting.Indented);
+            string result = null;
+            
+            try
+            {
+                dynamic parsedJson = JsonConvert.DeserializeObject(json);
+                result = JsonConvert.SerializeObject(parsedJson, Formatting.Indented);
+            }
+            catch(Exception)
+            {
+                result = json;
+            }
+
+            return result;
         }
 
         private void ScannerListView_MouseDoubleClick(object sender, MouseEventArgs e)

@@ -62,14 +62,31 @@ namespace MDAdapter.MDClient.RestAPI
         {
             MDResponse result = new MDResponse();
 
-            FileInfo fileInfo = new FileInfo(filePath);
+            try
+            {
+                FileInfo fileInfo = new FileInfo(filePath);
+                JObject parsedJson = JObject.Parse(json);
+                result.DataId = (string)parsedJson["data_id"];
+                result.Status = (string)parsedJson["status"];
+                result.FileName = fileInfo.Name;
+                result.RawJson = json;
+                result.TotalEngines = "0";
 
-            JObject parsedJson = JObject.Parse(json);
-            result.DataId = (string)parsedJson["data_id"];
-            result.Status = (string)parsedJson["status"];
-            result.FileName = fileInfo.Name;
-            result.RawJson = json;
-            result.TotalEngines = "0";
+                if(result.Status == null)
+                {
+                    result.Status = "inqueue";
+                }
+
+            }
+            catch(Exception e)
+            {
+                result.DataId = "Unknown";
+                result.Status = "Failed to Post";
+                result.FileName = filePath;
+                result.RawJson = e.ToString();
+                result.ResponseType = e.ToString();
+                result.TotalEngines = "0";
+            }
 
             return result;
         }
