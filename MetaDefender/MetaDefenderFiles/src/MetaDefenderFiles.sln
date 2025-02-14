@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35514.174
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetaDefenderFiles", "MetaDefenderFiles\MetaDefenderFiles.csproj", "{C336BF86-1573-48AE-BBCA-1B9BF95CA4D0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDAdapter", "MDAdapter\MDAdapter.csproj", "{77655A4A-6D98-464C-80A9-183219D45E17}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C336BF86-1573-48AE-BBCA-1B9BF95CA4D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C336BF86-1573-48AE-BBCA-1B9BF95CA4D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C336BF86-1573-48AE-BBCA-1B9BF95CA4D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C336BF86-1573-48AE-BBCA-1B9BF95CA4D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77655A4A-6D98-464C-80A9-183219D45E17}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77655A4A-6D98-464C-80A9-183219D45E17}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77655A4A-6D98-464C-80A9-183219D45E17}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77655A4A-6D98-464C-80A9-183219D45E17}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

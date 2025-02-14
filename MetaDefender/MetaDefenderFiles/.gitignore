@@ -1,0 +1,7 @@
+
+src/.vs/
+src/MetaDefenderFiles/bin/
+src/MetaDefenderFiles/obj/
+
+src/MDAdapter/bin/
+src/MDAdapter/obj/
