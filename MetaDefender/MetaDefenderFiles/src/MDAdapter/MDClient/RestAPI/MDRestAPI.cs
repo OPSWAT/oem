@@ -114,6 +114,35 @@ namespace MDAdapter.MDClient.RestAPI
         }
 
 
+        // This applies to an OnPrem install only
+        public static string GetAnalysisRules (string serverEndpoint, string apikey)
+        {
+            string result = null;
+            string requestUrl = serverEndpoint + "/file/rules";
+
+            try
+            {
+
+                //ComponentResposne reference = null;
+                using (var httpClient = new HttpClient())
+                {
+                    httpClient.DefaultRequestHeaders.Add("apiKey", apikey);
+
+                    var response = httpClient.GetAsync(requestUrl).Result;
+                    string responseText = response.StatusCode + ":" + response.ReasonPhrase;
+
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        result = response.Content.ReadAsStringAsync().Result;
+                    }
+                }
+            }
+            catch (Exception)
+            { }
+
+            return result;
+        }
+
 
     }
 }

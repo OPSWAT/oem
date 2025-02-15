@@ -5,19 +5,18 @@
 ///  Created by Chris Seiler
 ///  OPSWAT OEM Solutions Architect
 ///////////////////////////////////////////////////////////////////////////////////////////////
-
 using MDAdapter.MDClient;
 
-namespace MDAdapter.MDAccess
+namespace MetaDefenderFiles
 {
-    internal interface IMDClient
+    internal class WorkerEnvironment
     {
-        void Initialize(string serverEndpoint, string apikey);
+        MDRule rule;
+        string serverEndpoint;
+        string apikey;
 
-        public MDResponse GetStaus(string dataId);
-
-        public MDResponse PostFile(string filePath, MDRule rule);
-
-        public MDRuleList GetAvailableRules();
+        public MDRule Rule { get => rule; set => rule = value; }
+        public string ServerEndpoint { get => serverEndpoint; set => serverEndpoint = value; }
+        public string Apikey { get => apikey; set => apikey = value; }
     }
 }

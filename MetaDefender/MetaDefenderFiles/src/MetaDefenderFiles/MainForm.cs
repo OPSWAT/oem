@@ -38,8 +38,6 @@ namespace MetaDefenderFiles
             pbLoading.Visible = true;
         }
 
-
-
         // Set up the BackgroundWorker object by
         // attaching event handlers.
         private void InitializeBackgroundWorkers()
@@ -60,8 +58,6 @@ namespace MetaDefenderFiles
 
 
         }
-
-
 
         private void LoadSettings()
         {
@@ -109,7 +105,7 @@ namespace MetaDefenderFiles
                 default:
                     {
                         rbCustom.Checked = true;
-                        tbCustomRule.Text = settings.CustomRule;
+                        cbRuleListBox.Text = settings.CustomRule;
                         break;
                     }
             }
@@ -131,10 +127,10 @@ namespace MetaDefenderFiles
                 settings.CloudEndpoint = false;
             }
 
-            if(rbCustom.Checked)
+            if (rbCustom.Checked)
             {
                 settings.Rule = "custom";
-                settings.CustomRule = tbCustomRule.Text;
+                settings.CustomRule = cbRuleListBox.Text;
             }
             else
             {
@@ -146,22 +142,11 @@ namespace MetaDefenderFiles
             settings.Serialize();
         }
 
-        private Settings getSettings()
+        private MDFileAnalysis getFileAnalyzer(WorkerEnvironment we)
         {
-            SaveSettings();
-            return Settings.Deserialize();
-        }
-
-        private MDFileAnalysis getFileAnalyzer()
-        {
-            CheckConnectionInfo();
-
-            Settings settings = getSettings();
-            MDFileAnalysis fileAnalyzer = new MDFileAnalysis(settings.GetServerEndpointAddress(), settings.Apikey);
-
+            MDFileAnalysis fileAnalyzer = new MDFileAnalysis(we.ServerEndpoint, we.Apikey);
             return fileAnalyzer;
         }
-
 
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,10 +158,10 @@ namespace MetaDefenderFiles
         {
             try
             {
-                MDFileAnalysis fileAnalyzer = getFileAnalyzer();
-
-                MDRule rule = GetMDRule();
-                List<MDResponse> processFileTempResult = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, rule);
+                WorkerEnvironment we = (WorkerEnvironment)e.Argument;
+                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
+                                
+                List<MDResponse> processFileTempResult = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, we.Rule);
                 processFileList = processFileTempResult;
             }
             catch (Exception runningException)
@@ -196,9 +181,9 @@ namespace MetaDefenderFiles
         {
             try
             {
-                MDFileAnalysis fileAnalyzer = getFileAnalyzer();
+                WorkerEnvironment we = (WorkerEnvironment)e.Argument;
+                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
 
-                MDRule rule = GetMDRule();
                 List<MDResponse> processFileTempResult = fileAnalyzer.UpdateStatusOnResponseList(processFileList);
                 processFileList = processFileTempResult;
             }
@@ -218,7 +203,6 @@ namespace MetaDefenderFiles
 
         private string GetSettingServerEndpointAddress()
         {
-            SaveSettings();
             Settings settings = Settings.Deserialize();
             string serverEndpoint = settings.GetServerEndpointAddress();
 
@@ -238,7 +222,7 @@ namespace MetaDefenderFiles
             {
                 throw new Exception("\"The Server Endpoint needs to be specified.  It should be in the format of \\\"https://%serverAddress%//v4\\\"");
             }
-            
+
         }
 
         private void rbOnPremEndpoint_CheckedChanged(object sender, EventArgs e)
@@ -269,11 +253,11 @@ namespace MetaDefenderFiles
         {
             if (rbCustom.Checked == true)
             {
-                tbCustomRule.Enabled = true;
+                cbRuleListBox.Enabled = true;
             }
             else
             {
-                tbCustomRule.Enabled = false;
+                cbRuleListBox.Enabled = false;
             }
         }
 
@@ -283,7 +267,7 @@ namespace MetaDefenderFiles
 
             if (rbCustom.Checked)
             {
-                result.SetCustomRule(tbCustomRule.Text);
+                result.SetCustomRule(cbRuleListBox.Text);
             }
             else
             {
@@ -308,6 +292,20 @@ namespace MetaDefenderFiles
             return result;
         }
 
+        private WorkerEnvironment GetWorkerEnvironment()
+        {
+            WorkerEnvironment result = new WorkerEnvironment();
+
+            CheckConnectionInfo();
+
+            result.Rule = GetMDRule();
+            result.ServerEndpoint = tbServerEndpoint.Text;
+            result.Apikey = tbApiKey.Text;
+            SaveSettings();
+
+            return result;
+        }
+
         private void UpdateProcessingList()
         {
 
@@ -324,26 +322,13 @@ namespace MetaDefenderFiles
             }
         }
 
-        private string GetServerEndpoint()
-        {
-            string result = "";
-            if(rbCloudEndpoint.Checked)
-            {
-                result = "https://api.metadefender.com/v4";
-            }
-            else
-            {
-                result = tbServerEndpoint.Text;
-            }
-
-            return result;
-        }
-
         private void btnProcessFiles_Click(object sender, EventArgs e)
         {
             lvScanResult.Items.Clear();
             ShowLoading();
-            scanWorker.RunWorkerAsync(false);
+
+            WorkerEnvironment we = GetWorkerEnvironment();
+            scanWorker.RunWorkerAsync(we);
         }
 
         private void btnBrowseFolder_Click(object sender, EventArgs e)
@@ -356,12 +341,32 @@ namespace MetaDefenderFiles
         {
             lvScanResult.Items.Clear();
             ShowLoading();
-            statusWorker.RunWorkerAsync(false);
+
+            WorkerEnvironment we = GetWorkerEnvironment();
+            statusWorker.RunWorkerAsync(we);
         }
 
         private void btnShowKey_Click(object sender, EventArgs e)
         {
             MessageBox.Show(tbApiKey.Text);
         }
+
+        private void cbRules_DropDown(object sender, EventArgs e)
+        {
+            if (cbRuleListBox.Items.Count <= 1)
+            {
+                WorkerEnvironment we = GetWorkerEnvironment();
+                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
+                MDRuleList ruleList = fileAnalyzer.GetRuleList();
+
+                cbRuleListBox.Items.Clear();
+
+                foreach (string rule in ruleList)
+                {
+                    cbRuleListBox.Items.Add(rule);
+                }
+            }
+        }
+
     }
 }

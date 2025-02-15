@@ -97,8 +97,9 @@ namespace MDAdapter.MDClient
                         MDResponse fileAnalysisResponse = GetStatus(dataID);
                         result.Add(fileAnalysisResponse);
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
+                        System.Console.WriteLine(e.Message);
                         /*
                         // Get this directly with Rest
                         //TODO: Finish this up to be able to return the Analysis result.  Make sure to parse it accordingly.  Test a document that fails DLP
@@ -127,6 +128,9 @@ namespace MDAdapter.MDClient
             localFileStream.Close();
         }
 
-
+        public MDRuleList GetRuleList()
+        {
+            return client.GetAvailableRules();
+        }
     }
 }

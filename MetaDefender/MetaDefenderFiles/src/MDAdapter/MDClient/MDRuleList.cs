@@ -6,18 +6,13 @@
 ///  OPSWAT OEM Solutions Architect
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-using MDAdapter.MDClient;
-
-namespace MDAdapter.MDAccess
+namespace MDAdapter.MDClient
 {
-    internal interface IMDClient
+    public class MDRuleList : List<string>
     {
-        void Initialize(string serverEndpoint, string apikey);
-
-        public MDResponse GetStaus(string dataId);
-
-        public MDResponse PostFile(string filePath, MDRule rule);
-
-        public MDRuleList GetAvailableRules();
+        public void AddRule(string rule)
+        {
+            this.Add(rule);
+        }
     }
 }

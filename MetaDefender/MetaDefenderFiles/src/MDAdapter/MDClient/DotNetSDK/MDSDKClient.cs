@@ -75,5 +75,10 @@ namespace MDAdapter.MDClient.DotNetSDK
 
             return result;
         }
+
+        public MDRuleList GetAvailableRules()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

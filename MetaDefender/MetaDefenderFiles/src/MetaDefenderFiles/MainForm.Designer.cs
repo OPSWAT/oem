@@ -36,7 +36,6 @@
             tbTargetFolderPath = new TextBox();
             label3 = new Label();
             btnBrowseFolder = new Button();
-            tbCustomRule = new TextBox();
             rbCustom = new RadioButton();
             rbDLP = new RadioButton();
             rbUnarchive = new RadioButton();
@@ -50,6 +49,7 @@
             rbOnPremEndpoint = new RadioButton();
             tabControl1 = new TabControl();
             tabPage1 = new TabPage();
+            cbRuleListBox = new ComboBox();
             label6 = new Label();
             pbLoading = new PictureBox();
             lvScanResult = new ScannerListView();
@@ -133,14 +133,6 @@
             btnBrowseFolder.Text = "Browse";
             btnBrowseFolder.UseVisualStyleBackColor = true;
             btnBrowseFolder.Click += btnBrowseFolder_Click;
-            // 
-            // tbCustomRule
-            // 
-            tbCustomRule.Enabled = false;
-            tbCustomRule.Location = new Point(456, 50);
-            tbCustomRule.Name = "tbCustomRule";
-            tbCustomRule.Size = new Size(353, 23);
-            tbCustomRule.TabIndex = 10;
             // 
             // rbCustom
             // 
@@ -267,11 +259,11 @@
             // 
             // tabPage1
             // 
+            tabPage1.Controls.Add(cbRuleListBox);
             tabPage1.Controls.Add(label6);
             tabPage1.Controls.Add(pbLoading);
             tabPage1.Controls.Add(lvScanResult);
             tabPage1.Controls.Add(btnRefreshStatus);
-            tabPage1.Controls.Add(tbCustomRule);
             tabPage1.Controls.Add(tbTargetFolderPath);
             tabPage1.Controls.Add(label3);
             tabPage1.Controls.Add(label5);
@@ -291,6 +283,15 @@
             tabPage1.TabIndex = 0;
             tabPage1.Text = "Folder";
             tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // cbRuleListBox
+            // 
+            cbRuleListBox.FormattingEnabled = true;
+            cbRuleListBox.Location = new Point(459, 50);
+            cbRuleListBox.Name = "cbRuleListBox";
+            cbRuleListBox.Size = new Size(350, 23);
+            cbRuleListBox.TabIndex = 36;
+            cbRuleListBox.DropDown += cbRules_DropDown;
             // 
             // label6
             // 
@@ -333,7 +334,7 @@
             // columnHeader2
             // 
             columnHeader2.Text = "Status";
-            columnHeader2.Width = 100;
+            columnHeader2.Width = 200;
             // 
             // columnHeader3
             // 
@@ -386,7 +387,6 @@
         private TextBox tbTargetFolderPath;
         private Label label3;
         private Button btnBrowseFolder;
-        private TextBox tbCustomRule;
         private RadioButton rbCustom;
         private RadioButton rbDLP;
         private RadioButton rbUnarchive;
@@ -409,5 +409,6 @@
         private ColumnHeader columnHeader4;
         private PictureBox pbLoading;
         private Label label6;
+        private ComboBox cbRuleListBox;
     }
 }

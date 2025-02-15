@@ -27,21 +27,39 @@ namespace MDAdapter.MDClient.RestAPI
         {
             MDResponse result = new MDResponse();
 
-            JObject parsedJson = JObject.Parse(json);
-            result.DataId = (string)parsedJson["data_id"];
-            result.Status = (string)parsedJson["process_info"]["verdicts"][0];
-            result.FileName = (string)parsedJson["file_info"]["display_name"];
-            result.RawJson = json;
-            result.TotalEngines = (string)parsedJson["scan_results"]["total_avs"];
+            try
+            {
+                JObject parsedJson = JObject.Parse(json);
+                result.DataId = (string)parsedJson["data_id"];
+                result.FileName = (string)parsedJson["file_info"]["display_name"];
+                result.RawJson = json;
+                result.TotalEngines = (string)parsedJson["scan_results"]["total_avs"];
 
-            object dlpJSON = parsedJson["dlp_info"];
-            if (dlpJSON != null)
-            {
-                result.ResponseType = "DLP Result";
+                object dlpJSON = parsedJson["dlp_info"];
+                if (dlpJSON != null)
+                {
+                    result.ResponseType = "DLP Result";
+                }
+                else
+                {
+                    result.ResponseType = "Multi-Scan Result";
+                }
+
+                if (parsedJson["process_info"]["verdicts"] != null)
+                {
+                    result.Status = "processing";
+                    JArray verdictArray = (JArray)parsedJson["process_info"]["verdicts"];
+
+                    if(verdictArray.Count > 0)
+                    {
+                        result.Status = (string)verdictArray[0];
+                    }
+
+                }
             }
-            else
+            catch (Exception e)
             {
-                result.ResponseType = "Multi-Scan Result";
+                result.RawJson = json;
             }
 
 
@@ -99,6 +117,38 @@ namespace MDAdapter.MDClient.RestAPI
             MDResponse result = ParsePostFileResult(jsonResult, filePath);
 
             // return URI of the created resource.
+            return result;
+        }
+
+
+
+        private MDRuleList ParseAvailableRulesResult(string json)
+        {
+            MDRuleList result = new MDRuleList();
+
+            try
+            {
+                JArray parsedJson = JArray.Parse(json);
+                foreach(JToken rule in parsedJson)
+                {
+                    result.Add((string)rule["name"]);
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return result;
+        }
+
+
+
+        public MDRuleList GetAvailableRules()
+        {
+            MDRuleList result = new MDRuleList();
+            string jsonResult = MDRestAPI.GetAnalysisRules(serverEndpoint, apiKey);
+            result = ParseAvailableRulesResult(jsonResult);
+
             return result;
         }
     }
