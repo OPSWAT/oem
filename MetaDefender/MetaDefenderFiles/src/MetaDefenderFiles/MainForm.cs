@@ -14,8 +14,10 @@ namespace MetaDefenderFiles
     public partial class MainForm : Form
     {
         private List<MDResponse> processFileList = new List<MDResponse>();
-        private BackgroundWorker scanWorker;
-        private BackgroundWorker statusWorker;
+        private BackgroundWorker fileScanWorker;
+        private BackgroundWorker fileStatusWorker;
+
+        private BackgroundWorker hashLookupWorker;
 
 
 
@@ -42,22 +44,32 @@ namespace MetaDefenderFiles
         // attaching event handlers.
         private void InitializeBackgroundWorkers()
         {
-            scanWorker = new BackgroundWorker();
-            scanWorker.DoWork +=
-                new DoWorkEventHandler(scanWorker_DoWork);
-            scanWorker.RunWorkerCompleted +=
+            // Scan File Workers
+            fileScanWorker = new BackgroundWorker();
+            fileScanWorker.DoWork +=
+                new DoWorkEventHandler(FileScanWorker_DoWork);
+            fileScanWorker.RunWorkerCompleted +=
                 new RunWorkerCompletedEventHandler(
-            scanWorker_Completed);
+            FileScanWorker_Completed);
 
-            statusWorker = new BackgroundWorker();
-            statusWorker.DoWork +=
-                new DoWorkEventHandler(statusWorker_DoWork);
-            statusWorker.RunWorkerCompleted +=
+            fileStatusWorker = new BackgroundWorker();
+            fileStatusWorker.DoWork +=
+                new DoWorkEventHandler(FileStatusWorker_DoWork);
+            fileStatusWorker.RunWorkerCompleted +=
                 new RunWorkerCompletedEventHandler(
-            statusWorker_Completed);
+            FileStatusWorker_Completed);
 
+
+            // Lookup Hash Workers
+            hashLookupWorker = new BackgroundWorker();
+            hashLookupWorker.DoWork +=
+                new DoWorkEventHandler(HashLookupWorker_DoWork);
+            hashLookupWorker.RunWorkerCompleted +=
+                new RunWorkerCompletedEventHandler(
+            HashLookupWorker_Completed);
 
         }
+                 
 
         private void LoadSettings()
         {
@@ -109,6 +121,35 @@ namespace MetaDefenderFiles
                         break;
                     }
             }
+
+            switch (settings.HashProcess)
+            {
+                case MDHashProcess.single:
+                    {
+                        rbHashSingle.Checked = true;
+                        break;
+                    }
+                case MDHashProcess.listfile:
+                    {
+                        rbHashListFile.Checked = true;
+                        break;
+                    }
+                case MDHashProcess.filefolder:
+                    {
+                        rbHashFileFolder.Checked = true;
+                        break;
+                    }
+                default:
+                    {
+                        break;
+                    }
+
+            }
+
+            tbHashSingle.Text = settings.HashSingle;
+            tbHashListFile.Text = settings.HashFile;
+            tbHashFileFolder.Text = settings.HashFileFolder;
+
         }
 
         private void SaveSettings()
@@ -138,30 +179,51 @@ namespace MetaDefenderFiles
                 settings.Rule = mdRule.GetRuleString();
             }
 
+            settings.HashProcess = GetHashProcess();
+            settings.HashSingle = tbHashSingle.Text;
+            settings.HashFile = tbHashListFile.Text;
+            settings.HashFileFolder = tbHashFileFolder.Text;
 
             settings.Serialize();
         }
 
-        private MDFileAnalysis getFileAnalyzer(WorkerEnvironment we)
+        private MDHashProcess GetHashProcess()
         {
-            MDFileAnalysis fileAnalyzer = new MDFileAnalysis(we.ServerEndpoint, we.Apikey);
+            MDHashProcess result = MDHashProcess.filefolder;
+
+            if (rbHashSingle.Checked)
+            {
+                result = MDHashProcess.single;
+            }
+            else if (rbHashListFile.Checked)
+            {
+                result = MDHashProcess.listfile;
+            }
+
+            return result;
+        }
+
+
+        private MDFileAnalysis GetFileAnalyzer(string serverEndpoint, string apiKey)
+        {
+            MDFileAnalysis fileAnalyzer = new MDFileAnalysis(serverEndpoint, apiKey);
             return fileAnalyzer;
         }
 
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         /// <summary>
-        ///  Worker Threads
+        ///  File Worker Threads
         /// </summary>
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        private void scanWorker_DoWork(object sender, DoWorkEventArgs e)
+        private void FileScanWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
             {
-                WorkerEnvironment we = (WorkerEnvironment)e.Argument;
-                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
-                                
-                List<MDResponse> processFileTempResult = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, we.Rule);
+                FileEnvironment fe = (FileEnvironment)e.Argument;
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
+
+                List<MDResponse> processFileTempResult = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, fe.Rule);
                 processFileList = processFileTempResult;
             }
             catch (Exception runningException)
@@ -170,19 +232,19 @@ namespace MetaDefenderFiles
             }
         }
 
-        private void scanWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
+        private void FileScanWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
-            UpdateProcessingList();
+            UpdateFileScanList();
             HideLoading();
         }
 
 
-        private void statusWorker_DoWork(object sender, DoWorkEventArgs e)
+        private void FileStatusWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
             {
-                WorkerEnvironment we = (WorkerEnvironment)e.Argument;
-                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
+                FileEnvironment fe = (FileEnvironment)e.Argument;
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
 
                 List<MDResponse> processFileTempResult = fileAnalyzer.UpdateStatusOnResponseList(processFileList);
                 processFileList = processFileTempResult;
@@ -194,10 +256,59 @@ namespace MetaDefenderFiles
 
         }
 
-        private void statusWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
+        private void FileStatusWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
-            UpdateProcessingList();
+            UpdateFileScanList();
             HideLoading();
+        }
+
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        /// <summary>
+        ///  Hash Worker Threads
+        /// </summary>
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        private void HashLookupWorker_DoWork(object sender, DoWorkEventArgs e)
+        {
+            try
+            {
+                int maxEntries = 100;
+                HashEnvironment he = (HashEnvironment)e.Argument;
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(he.ServerEndpoint,he.Apikey);
+
+
+                List<MDResponse> result = new List<MDResponse>();
+
+                if(he.HashProcess == MDHashProcess.single)
+                {
+                    MDResponse singleResponse = fileAnalyzer.LookupHash(he.Single);
+                    if(singleResponse != null)
+                    {
+                        result.Add(singleResponse);
+                    }
+                }
+                else if(he.HashProcess == MDHashProcess.listfile)
+                {
+                    result = fileAnalyzer.LookupHashesFromListFile(he.ListFile, maxEntries);
+                }
+                else if(he.HashProcess == MDHashProcess.filefolder)
+                {
+                    result = fileAnalyzer.LookupHashesFileFolder(he.FileFolder, maxEntries);
+                }
+
+                e.Result = result;
+            }
+            catch (Exception runningException)
+            {
+                MessageBox.Show(runningException.Message);
+            }
+        }
+
+        private void HashLookupWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
+        {
+            List<MDResponse> responseList = e.Result as List<MDResponse>;
+            HideLoading();
+            UpdateFileScanList();
         }
 
 
@@ -236,6 +347,7 @@ namespace MetaDefenderFiles
                 rbSanitize.Enabled = false;
                 rbCustom.Enabled = true;
                 rbCustom.Checked = true;
+                tpHash.Enabled = false;
             }
             else
             {
@@ -246,6 +358,7 @@ namespace MetaDefenderFiles
                 rbSanitize.Enabled = true;
                 rbCustom.Enabled = false;
                 rbMultiscan.Checked = true;
+                tpHash.Enabled = true;
             }
         }
 
@@ -292,9 +405,9 @@ namespace MetaDefenderFiles
             return result;
         }
 
-        private WorkerEnvironment GetWorkerEnvironment()
+        private FileEnvironment GetFileEnvironment()
         {
-            WorkerEnvironment result = new WorkerEnvironment();
+            FileEnvironment result = new FileEnvironment();
 
             CheckConnectionInfo();
 
@@ -306,7 +419,26 @@ namespace MetaDefenderFiles
             return result;
         }
 
-        private void UpdateProcessingList()
+        private HashEnvironment GetHashEnvironment()
+        {
+            HashEnvironment result = new HashEnvironment();
+
+            CheckConnectionInfo();
+
+            result.HashProcess = GetHashProcess();
+            result.Single = tbHashSingle.Text;
+            result.ListFile = tbHashListFile.Text;
+            result.FileFolder = tbHashFileFolder.Text;
+
+            result.ServerEndpoint = tbServerEndpoint.Text;
+            result.Apikey = tbApiKey.Text;
+
+            return result;
+        }
+
+
+
+        private void UpdateFileScanList()
         {
 
             foreach (MDResponse current in processFileList)
@@ -327,8 +459,8 @@ namespace MetaDefenderFiles
             lvScanResult.Items.Clear();
             ShowLoading();
 
-            WorkerEnvironment we = GetWorkerEnvironment();
-            scanWorker.RunWorkerAsync(we);
+            FileEnvironment fe = GetFileEnvironment();
+            fileScanWorker.RunWorkerAsync(fe);
         }
 
         private void btnBrowseFolder_Click(object sender, EventArgs e)
@@ -342,8 +474,8 @@ namespace MetaDefenderFiles
             lvScanResult.Items.Clear();
             ShowLoading();
 
-            WorkerEnvironment we = GetWorkerEnvironment();
-            statusWorker.RunWorkerAsync(we);
+            FileEnvironment fe = GetFileEnvironment();
+            fileStatusWorker.RunWorkerAsync(fe);
         }
 
         private void btnShowKey_Click(object sender, EventArgs e)
@@ -355,8 +487,8 @@ namespace MetaDefenderFiles
         {
             if (cbRuleListBox.Items.Count <= 1)
             {
-                WorkerEnvironment we = GetWorkerEnvironment();
-                MDFileAnalysis fileAnalyzer = getFileAnalyzer(we);
+                FileEnvironment fe = GetFileEnvironment();
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
                 MDRuleList ruleList = fileAnalyzer.GetRuleList();
 
                 cbRuleListBox.Items.Clear();
@@ -368,5 +500,57 @@ namespace MetaDefenderFiles
             }
         }
 
+        private void btnProcessHashes_Click(object sender, EventArgs e)
+        {
+            HashEnvironment hashEnvironment = GetHashEnvironment();
+
+            ShowLoading();
+            hashLookupWorker.RunWorkerAsync(hashEnvironment);
+        }
+
+
+        private void HashRadioButtonChanged()
+        {
+            if (rbHashSingle.Checked)
+            {
+                tbHashSingle.Enabled = true;
+                tbHashListFile.Enabled = false;
+                tbHashFileFolder.Enabled = false;
+                btnHashFileFolder.Enabled = false;
+                btnHashListFile.Enabled = false;
+            }
+            else if (rbHashListFile.Checked)
+            {
+                tbHashSingle.Enabled = false;
+                tbHashListFile.Enabled = true;
+                tbHashFileFolder.Enabled = false;
+                btnHashFileFolder.Enabled = false;
+                btnHashListFile.Enabled = true;
+            }
+            else if (rbHashFileFolder.Checked)
+            {
+                tbHashSingle.Enabled = false;
+                tbHashListFile.Enabled = false;
+                tbHashFileFolder.Enabled = true;
+                btnHashFileFolder.Enabled = true;
+                btnHashListFile.Enabled = false;
+            }
+
+        }
+
+        private void rbHashSingle_CheckedChanged(object sender, EventArgs e)
+        {
+            HashRadioButtonChanged();
+        }
+
+        private void rbHashListFile_CheckedChanged(object sender, EventArgs e)
+        {
+            HashRadioButtonChanged();
+        }
+
+        private void rbHashFileFolder_CheckedChanged(object sender, EventArgs e)
+        {
+            HashRadioButtonChanged();
+        }
     }
 }

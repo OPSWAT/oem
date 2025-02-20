@@ -57,7 +57,7 @@ namespace MDAdapter.MDClient.RestAPI
 
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 result.RawJson = json;
             }

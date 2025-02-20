@@ -9,13 +9,20 @@ using MDAdapter.MDClient;
 
 namespace MetaDefenderFiles
 {
-    internal class WorkerEnvironment
+    internal class HashEnvironment
     {
-        MDRule rule;
         string serverEndpoint;
         string apikey;
 
-        public MDRule Rule { get => rule; set => rule = value; }
+        MDHashProcess hashProcess;
+        string single;
+        string listFile;
+        string fileFolder;
+
+        public MDHashProcess HashProcess { get => hashProcess; set => hashProcess = value; }
+        public string Single { get => single; set => single = value; }
+        public string ListFile { get => listFile; set => listFile = value; }
+        public string FileFolder { get => fileFolder; set => fileFolder = value; }
         public string ServerEndpoint { get => serverEndpoint; set => serverEndpoint = value; }
         public string Apikey { get => apikey; set => apikey = value; }
     }

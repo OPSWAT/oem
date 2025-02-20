@@ -132,5 +132,23 @@ namespace MDAdapter.MDClient
         {
             return client.GetAvailableRules();
         }
+
+
+        //TODO: Implement these functions tomorrow
+        public MDResponse LookupHash(string hash)
+        {
+            return new MDResponse();
+        }
+
+        public List<MDResponse> LookupHashesFromListFile(string listFilePath, int maxEntries)
+        {
+            return null;
+        }
+
+        public List<MDResponse> LookupHashesFileFolder(string fileFolderPath, int maxEntries)
+        {
+            return null;
+        }
+
     }
 }

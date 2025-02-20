@@ -47,7 +47,7 @@
             label5 = new Label();
             rbCloudEndpoint = new RadioButton();
             rbOnPremEndpoint = new RadioButton();
-            tabControl1 = new TabControl();
+            tbMainTabs = new TabControl();
             tabPage1 = new TabPage();
             cbRuleListBox = new ComboBox();
             label6 = new Label();
@@ -58,10 +58,29 @@
             columnHeader3 = new ColumnHeader();
             columnHeader4 = new ColumnHeader();
             btnRefreshStatus = new Button();
+            tpHash = new TabPage();
+            label7 = new Label();
+            btnProcessHashes = new Button();
+            btnHashFileFolder = new Button();
+            btnHashListFile = new Button();
+            tbHashFileFolder = new TextBox();
+            tbHashListFile = new TextBox();
+            rbHashFileFolder = new RadioButton();
+            rbHashListFile = new RadioButton();
+            rbHashSingle = new RadioButton();
+            tbHashSingle = new TextBox();
+            pictureBox1 = new PictureBox();
+            scannerListView1 = new ScannerListView();
+            columnHeader5 = new ColumnHeader();
+            columnHeader6 = new ColumnHeader();
+            columnHeader7 = new ColumnHeader();
+            columnHeader8 = new ColumnHeader();
             folderBrowserDialog1 = new FolderBrowserDialog();
-            tabControl1.SuspendLayout();
+            tbMainTabs.SuspendLayout();
             tabPage1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pbLoading).BeginInit();
+            tpHash.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             SuspendLayout();
             // 
             // tbServerEndpoint
@@ -248,14 +267,15 @@
             rbOnPremEndpoint.UseVisualStyleBackColor = true;
             rbOnPremEndpoint.CheckedChanged += rbOnPremEndpoint_CheckedChanged;
             // 
-            // tabControl1
+            // tbMainTabs
             // 
-            tabControl1.Controls.Add(tabPage1);
-            tabControl1.Location = new Point(12, 40);
-            tabControl1.Name = "tabControl1";
-            tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(928, 479);
-            tabControl1.TabIndex = 33;
+            tbMainTabs.Controls.Add(tabPage1);
+            tbMainTabs.Controls.Add(tpHash);
+            tbMainTabs.Location = new Point(12, 40);
+            tbMainTabs.Name = "tbMainTabs";
+            tbMainTabs.SelectedIndex = 0;
+            tbMainTabs.Size = new Size(928, 479);
+            tbMainTabs.TabIndex = 33;
             // 
             // tabPage1
             // 
@@ -355,12 +375,172 @@
             btnRefreshStatus.UseVisualStyleBackColor = true;
             btnRefreshStatus.Click += btnRefreshStatus_Click;
             // 
+            // tpHash
+            // 
+            tpHash.Controls.Add(label7);
+            tpHash.Controls.Add(btnProcessHashes);
+            tpHash.Controls.Add(btnHashFileFolder);
+            tpHash.Controls.Add(btnHashListFile);
+            tpHash.Controls.Add(tbHashFileFolder);
+            tpHash.Controls.Add(tbHashListFile);
+            tpHash.Controls.Add(rbHashFileFolder);
+            tpHash.Controls.Add(rbHashListFile);
+            tpHash.Controls.Add(rbHashSingle);
+            tpHash.Controls.Add(tbHashSingle);
+            tpHash.Controls.Add(pictureBox1);
+            tpHash.Controls.Add(scannerListView1);
+            tpHash.Location = new Point(4, 24);
+            tpHash.Name = "tpHash";
+            tpHash.Padding = new Padding(3);
+            tpHash.Size = new Size(920, 451);
+            tpHash.TabIndex = 1;
+            tpHash.Text = "Hash";
+            tpHash.UseVisualStyleBackColor = true;
+            // 
+            // label7
+            // 
+            label7.AutoSize = true;
+            label7.Location = new Point(701, 107);
+            label7.Name = "label7";
+            label7.Size = new Size(213, 15);
+            label7.TabIndex = 48;
+            label7.Text = "Double click on item to see JSON result";
+            // 
+            // btnProcessHashes
+            // 
+            btnProcessHashes.Location = new Point(773, 23);
+            btnProcessHashes.Name = "btnProcessHashes";
+            btnProcessHashes.Size = new Size(118, 66);
+            btnProcessHashes.TabIndex = 47;
+            btnProcessHashes.Text = "Process";
+            btnProcessHashes.UseVisualStyleBackColor = true;
+            btnProcessHashes.Click += btnProcessHashes_Click;
+            // 
+            // btnHashFileFolder
+            // 
+            btnHashFileFolder.Location = new Point(536, 80);
+            btnHashFileFolder.Name = "btnHashFileFolder";
+            btnHashFileFolder.Size = new Size(75, 23);
+            btnHashFileFolder.TabIndex = 46;
+            btnHashFileFolder.Text = "Browse";
+            btnHashFileFolder.UseVisualStyleBackColor = true;
+            // 
+            // btnHashListFile
+            // 
+            btnHashListFile.Location = new Point(536, 45);
+            btnHashListFile.Name = "btnHashListFile";
+            btnHashListFile.Size = new Size(75, 23);
+            btnHashListFile.TabIndex = 45;
+            btnHashListFile.Text = "Browse";
+            btnHashListFile.UseVisualStyleBackColor = true;
+            // 
+            // tbHashFileFolder
+            // 
+            tbHashFileFolder.Location = new Point(101, 81);
+            tbHashFileFolder.Name = "tbHashFileFolder";
+            tbHashFileFolder.Size = new Size(428, 23);
+            tbHashFileFolder.TabIndex = 44;
+            // 
+            // tbHashListFile
+            // 
+            tbHashListFile.Location = new Point(101, 46);
+            tbHashListFile.Name = "tbHashListFile";
+            tbHashListFile.Size = new Size(428, 23);
+            tbHashListFile.TabIndex = 43;
+            // 
+            // rbHashFileFolder
+            // 
+            rbHashFileFolder.AutoSize = true;
+            rbHashFileFolder.Location = new Point(13, 82);
+            rbHashFileFolder.Name = "rbHashFileFolder";
+            rbHashFileFolder.Size = new Size(82, 19);
+            rbHashFileFolder.TabIndex = 42;
+            rbHashFileFolder.TabStop = true;
+            rbHashFileFolder.Text = "File Folder:";
+            rbHashFileFolder.UseVisualStyleBackColor = true;
+            rbHashFileFolder.CheckedChanged += rbHashFileFolder_CheckedChanged;
+            // 
+            // rbHashListFile
+            // 
+            rbHashListFile.AutoSize = true;
+            rbHashListFile.Location = new Point(13, 47);
+            rbHashListFile.Name = "rbHashListFile";
+            rbHashListFile.Size = new Size(67, 19);
+            rbHashListFile.TabIndex = 41;
+            rbHashListFile.TabStop = true;
+            rbHashListFile.Text = "List File:";
+            rbHashListFile.UseVisualStyleBackColor = true;
+            rbHashListFile.CheckedChanged += rbHashListFile_CheckedChanged;
+            // 
+            // rbHashSingle
+            // 
+            rbHashSingle.AutoSize = true;
+            rbHashSingle.Location = new Point(13, 15);
+            rbHashSingle.Name = "rbHashSingle";
+            rbHashSingle.Size = new Size(55, 19);
+            rbHashSingle.TabIndex = 40;
+            rbHashSingle.TabStop = true;
+            rbHashSingle.Text = "Hash:";
+            rbHashSingle.UseVisualStyleBackColor = true;
+            rbHashSingle.CheckedChanged += rbHashSingle_CheckedChanged;
+            // 
+            // tbHashSingle
+            // 
+            tbHashSingle.Location = new Point(101, 14);
+            tbHashSingle.Name = "tbHashSingle";
+            tbHashSingle.Size = new Size(428, 23);
+            tbHashSingle.TabIndex = 37;
+            // 
+            // pictureBox1
+            // 
+            pictureBox1.Image = Properties.Resources.Loading;
+            pictureBox1.Location = new Point(298, 172);
+            pictureBox1.Name = "pictureBox1";
+            pictureBox1.Size = new Size(311, 259);
+            pictureBox1.SizeMode = PictureBoxSizeMode.StretchImage;
+            pictureBox1.TabIndex = 36;
+            pictureBox1.TabStop = false;
+            pictureBox1.Visible = false;
+            // 
+            // scannerListView1
+            // 
+            scannerListView1.Columns.AddRange(new ColumnHeader[] { columnHeader5, columnHeader6, columnHeader7, columnHeader8 });
+            scannerListView1.FullRowSelect = true;
+            scannerListView1.GridLines = true;
+            scannerListView1.Location = new Point(8, 125);
+            scannerListView1.MultiSelect = false;
+            scannerListView1.Name = "scannerListView1";
+            scannerListView1.OwnerDraw = true;
+            scannerListView1.Size = new Size(906, 320);
+            scannerListView1.TabIndex = 35;
+            scannerListView1.UseCompatibleStateImageBehavior = false;
+            scannerListView1.View = View.Details;
+            // 
+            // columnHeader5
+            // 
+            columnHeader5.Text = "File";
+            columnHeader5.Width = 300;
+            // 
+            // columnHeader6
+            // 
+            columnHeader6.Text = "Status";
+            columnHeader6.Width = 200;
+            // 
+            // columnHeader7
+            // 
+            columnHeader7.Text = "Engines";
+            // 
+            // columnHeader8
+            // 
+            columnHeader8.Text = "Scan Result";
+            columnHeader8.Width = 150;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(957, 531);
-            Controls.Add(tabControl1);
+            Controls.Add(tbMainTabs);
             Controls.Add(rbOnPremEndpoint);
             Controls.Add(rbCloudEndpoint);
             Controls.Add(btnShowKey);
@@ -370,10 +550,13 @@
             Controls.Add(tbServerEndpoint);
             Name = "MainForm";
             Text = "MetaDefender File Analyzer";
-            tabControl1.ResumeLayout(false);
+            tbMainTabs.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
             tabPage1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)pbLoading).EndInit();
+            tpHash.ResumeLayout(false);
+            tpHash.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -398,7 +581,7 @@
         private Label label5;
         private RadioButton rbCloudEndpoint;
         private RadioButton rbOnPremEndpoint;
-        private TabControl tabControl1;
+        private TabControl tbMainTabs;
         private TabPage tabPage1;
         private FolderBrowserDialog folderBrowserDialog1;
         private Button btnRefreshStatus;
@@ -410,5 +593,22 @@
         private PictureBox pbLoading;
         private Label label6;
         private ComboBox cbRuleListBox;
+        private TabPage tpHash;
+        private RadioButton rbHashFileFolder;
+        private RadioButton rbHashListFile;
+        private RadioButton rbHashSingle;
+        private TextBox tbHashSingle;
+        private PictureBox pictureBox1;
+        private ScannerListView scannerListView1;
+        private ColumnHeader columnHeader5;
+        private ColumnHeader columnHeader6;
+        private ColumnHeader columnHeader7;
+        private ColumnHeader columnHeader8;
+        private Button btnProcessHashes;
+        private Button btnHashFileFolder;
+        private Button btnHashListFile;
+        private TextBox tbHashFileFolder;
+        private TextBox tbHashListFile;
+        private Label label7;
     }
 }

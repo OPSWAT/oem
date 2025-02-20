@@ -6,6 +6,7 @@
 ///  OPSWAT OEM Solutions Architect
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+using MDAdapter.MDClient;
 using System.Text.Json;
 
 namespace MetaDefenderFiles
@@ -18,6 +19,13 @@ namespace MetaDefenderFiles
         private string rule;
         private bool   cloudEndpoint;
         private string customRule;
+        
+        private MDHashProcess hashProcess;
+        private string hashSingle;
+        private string hashFile;
+        private string hashFileFolder;
+
+
 
         public string ServerEndpoint { get => serverEndpoint; set => serverEndpoint = value; }
         public string Apikey { get => apikey; set => apikey = value; }
@@ -25,6 +33,10 @@ namespace MetaDefenderFiles
         public string Rule { get => rule; set => rule = value; }
         public bool CloudEndpoint { get => cloudEndpoint; set => cloudEndpoint = value; }
         public string CustomRule { get => customRule; set => customRule = value; }
+        public MDHashProcess HashProcess { get => hashProcess; set => hashProcess = value; }
+        public string HashSingle { get => hashSingle; set => hashSingle = value; }
+        public string HashFile { get => hashFile; set => hashFile = value; }
+        public string HashFileFolder { get => hashFileFolder; set => hashFileFolder = value; }
 
         public void Serialize()
         {
