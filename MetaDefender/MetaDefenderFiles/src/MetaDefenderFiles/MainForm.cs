@@ -311,15 +311,20 @@ namespace MetaDefenderFiles
             UpdateFileScanList();
         }
 
-
-        private string GetSettingServerEndpointAddress()
+        private string GetServerAddress()
         {
-            Settings settings = Settings.Deserialize();
-            string serverEndpoint = settings.GetServerEndpointAddress();
+            //
+            // This is the Endpoint address to use for the cloud
+            //
+            string result = "https://api.metadefender.com/v4";
 
-            return serverEndpoint;
+            if(rbOnPremEndpoint.Checked)
+            {
+                result = tbServerEndpoint.Text;
+            }
+
+            return result;
         }
-
 
         private void CheckConnectionInfo()
         {
@@ -328,7 +333,7 @@ namespace MetaDefenderFiles
                 throw new Exception("The APIKey is required to run this request.");
             }
 
-            string serverEndpoint = GetSettingServerEndpointAddress();
+            string serverEndpoint = GetServerAddress();
             if (string.IsNullOrEmpty(serverEndpoint))
             {
                 throw new Exception("\"The Server Endpoint needs to be specified.  It should be in the format of \\\"https://%serverAddress%//v4\\\"");
@@ -405,6 +410,7 @@ namespace MetaDefenderFiles
             return result;
         }
 
+
         private FileEnvironment GetFileEnvironment()
         {
             FileEnvironment result = new FileEnvironment();
@@ -412,7 +418,7 @@ namespace MetaDefenderFiles
             CheckConnectionInfo();
 
             result.Rule = GetMDRule();
-            result.ServerEndpoint = tbServerEndpoint.Text;
+            result.ServerEndpoint = GetServerAddress();
             result.Apikey = tbApiKey.Text;
             SaveSettings();
 
@@ -430,7 +436,7 @@ namespace MetaDefenderFiles
             result.ListFile = tbHashListFile.Text;
             result.FileFolder = tbHashFileFolder.Text;
 
-            result.ServerEndpoint = tbServerEndpoint.Text;
+            result.ServerEndpoint = GetServerAddress(); 
             result.Apikey = tbApiKey.Text;
 
             return result;
