@@ -51,11 +51,12 @@
             tabPage1 = new TabPage();
             cbRuleListBox = new ComboBox();
             label6 = new Label();
-            pbLoading = new PictureBox();
-            lvScanResult = new ScannerListView();
+            pbFileScanLoading = new PictureBox();
+            lvFileScanResult = new ScannerListView();
             columnHeader1 = new ColumnHeader();
             columnHeader2 = new ColumnHeader();
             columnHeader3 = new ColumnHeader();
+            columnHeader10 = new ColumnHeader();
             columnHeader4 = new ColumnHeader();
             btnRefreshStatus = new Button();
             tpHash = new TabPage();
@@ -69,18 +70,20 @@
             rbHashListFile = new RadioButton();
             rbHashSingle = new RadioButton();
             tbHashSingle = new TextBox();
-            pictureBox1 = new PictureBox();
-            scannerListView1 = new ScannerListView();
+            pbHashLookupLoading = new PictureBox();
+            lvHashLookupResult = new ScannerListView();
             columnHeader5 = new ColumnHeader();
             columnHeader6 = new ColumnHeader();
             columnHeader7 = new ColumnHeader();
+            columnHeader9 = new ColumnHeader();
             columnHeader8 = new ColumnHeader();
             folderBrowserDialog1 = new FolderBrowserDialog();
+            openFileDialog1 = new OpenFileDialog();
             tbMainTabs.SuspendLayout();
             tabPage1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)pbLoading).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)pbFileScanLoading).BeginInit();
             tpHash.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)pbHashLookupLoading).BeginInit();
             SuspendLayout();
             // 
             // tbServerEndpoint
@@ -281,8 +284,8 @@
             // 
             tabPage1.Controls.Add(cbRuleListBox);
             tabPage1.Controls.Add(label6);
-            tabPage1.Controls.Add(pbLoading);
-            tabPage1.Controls.Add(lvScanResult);
+            tabPage1.Controls.Add(pbFileScanLoading);
+            tabPage1.Controls.Add(lvFileScanResult);
             tabPage1.Controls.Add(btnRefreshStatus);
             tabPage1.Controls.Add(tbTargetFolderPath);
             tabPage1.Controls.Add(label3);
@@ -322,29 +325,29 @@
             label6.TabIndex = 35;
             label6.Text = "Double click on item to see JSON result";
             // 
-            // pbLoading
+            // pbFileScanLoading
             // 
-            pbLoading.Image = Properties.Resources.Loading;
-            pbLoading.Location = new Point(298, 172);
-            pbLoading.Name = "pbLoading";
-            pbLoading.Size = new Size(311, 259);
-            pbLoading.SizeMode = PictureBoxSizeMode.StretchImage;
-            pbLoading.TabIndex = 34;
-            pbLoading.TabStop = false;
+            pbFileScanLoading.Image = Properties.Resources.Loading;
+            pbFileScanLoading.Location = new Point(298, 172);
+            pbFileScanLoading.Name = "pbFileScanLoading";
+            pbFileScanLoading.Size = new Size(311, 259);
+            pbFileScanLoading.SizeMode = PictureBoxSizeMode.StretchImage;
+            pbFileScanLoading.TabIndex = 34;
+            pbFileScanLoading.TabStop = false;
             // 
-            // lvScanResult
+            // lvFileScanResult
             // 
-            lvScanResult.Columns.AddRange(new ColumnHeader[] { columnHeader1, columnHeader2, columnHeader3, columnHeader4 });
-            lvScanResult.FullRowSelect = true;
-            lvScanResult.GridLines = true;
-            lvScanResult.Location = new Point(8, 128);
-            lvScanResult.MultiSelect = false;
-            lvScanResult.Name = "lvScanResult";
-            lvScanResult.OwnerDraw = true;
-            lvScanResult.Size = new Size(906, 317);
-            lvScanResult.TabIndex = 33;
-            lvScanResult.UseCompatibleStateImageBehavior = false;
-            lvScanResult.View = View.Details;
+            lvFileScanResult.Columns.AddRange(new ColumnHeader[] { columnHeader1, columnHeader2, columnHeader3, columnHeader10, columnHeader4 });
+            lvFileScanResult.FullRowSelect = true;
+            lvFileScanResult.GridLines = true;
+            lvFileScanResult.Location = new Point(8, 128);
+            lvFileScanResult.MultiSelect = false;
+            lvFileScanResult.Name = "lvFileScanResult";
+            lvFileScanResult.OwnerDraw = true;
+            lvFileScanResult.Size = new Size(906, 317);
+            lvFileScanResult.TabIndex = 33;
+            lvFileScanResult.UseCompatibleStateImageBehavior = false;
+            lvFileScanResult.View = View.Details;
             // 
             // columnHeader1
             // 
@@ -360,10 +363,15 @@
             // 
             columnHeader3.Text = "Engines";
             // 
+            // columnHeader10
+            // 
+            columnHeader10.Text = "Threat";
+            columnHeader10.Width = 150;
+            // 
             // columnHeader4
             // 
             columnHeader4.Text = "Scan Result";
-            columnHeader4.Width = 150;
+            columnHeader4.Width = 200;
             // 
             // btnRefreshStatus
             // 
@@ -387,8 +395,8 @@
             tpHash.Controls.Add(rbHashListFile);
             tpHash.Controls.Add(rbHashSingle);
             tpHash.Controls.Add(tbHashSingle);
-            tpHash.Controls.Add(pictureBox1);
-            tpHash.Controls.Add(scannerListView1);
+            tpHash.Controls.Add(pbHashLookupLoading);
+            tpHash.Controls.Add(lvHashLookupResult);
             tpHash.Location = new Point(4, 24);
             tpHash.Name = "tpHash";
             tpHash.Padding = new Padding(3);
@@ -424,6 +432,7 @@
             btnHashFileFolder.TabIndex = 46;
             btnHashFileFolder.Text = "Browse";
             btnHashFileFolder.UseVisualStyleBackColor = true;
+            btnHashFileFolder.Click += btnHashFileFolder_Click;
             // 
             // btnHashListFile
             // 
@@ -433,6 +442,7 @@
             btnHashListFile.TabIndex = 45;
             btnHashListFile.Text = "Browse";
             btnHashListFile.UseVisualStyleBackColor = true;
+            btnHashListFile.Click += btnHashListFile_Click;
             // 
             // tbHashFileFolder
             // 
@@ -491,30 +501,30 @@
             tbHashSingle.Size = new Size(428, 23);
             tbHashSingle.TabIndex = 37;
             // 
-            // pictureBox1
+            // pbHashLookupLoading
             // 
-            pictureBox1.Image = Properties.Resources.Loading;
-            pictureBox1.Location = new Point(298, 172);
-            pictureBox1.Name = "pictureBox1";
-            pictureBox1.Size = new Size(311, 259);
-            pictureBox1.SizeMode = PictureBoxSizeMode.StretchImage;
-            pictureBox1.TabIndex = 36;
-            pictureBox1.TabStop = false;
-            pictureBox1.Visible = false;
+            pbHashLookupLoading.Image = Properties.Resources.Loading;
+            pbHashLookupLoading.Location = new Point(298, 172);
+            pbHashLookupLoading.Name = "pbHashLookupLoading";
+            pbHashLookupLoading.Size = new Size(311, 259);
+            pbHashLookupLoading.SizeMode = PictureBoxSizeMode.StretchImage;
+            pbHashLookupLoading.TabIndex = 36;
+            pbHashLookupLoading.TabStop = false;
+            pbHashLookupLoading.Visible = false;
             // 
-            // scannerListView1
+            // lvHashLookupResult
             // 
-            scannerListView1.Columns.AddRange(new ColumnHeader[] { columnHeader5, columnHeader6, columnHeader7, columnHeader8 });
-            scannerListView1.FullRowSelect = true;
-            scannerListView1.GridLines = true;
-            scannerListView1.Location = new Point(8, 125);
-            scannerListView1.MultiSelect = false;
-            scannerListView1.Name = "scannerListView1";
-            scannerListView1.OwnerDraw = true;
-            scannerListView1.Size = new Size(906, 320);
-            scannerListView1.TabIndex = 35;
-            scannerListView1.UseCompatibleStateImageBehavior = false;
-            scannerListView1.View = View.Details;
+            lvHashLookupResult.Columns.AddRange(new ColumnHeader[] { columnHeader5, columnHeader6, columnHeader7, columnHeader9, columnHeader8 });
+            lvHashLookupResult.FullRowSelect = true;
+            lvHashLookupResult.GridLines = true;
+            lvHashLookupResult.Location = new Point(8, 125);
+            lvHashLookupResult.MultiSelect = false;
+            lvHashLookupResult.Name = "lvHashLookupResult";
+            lvHashLookupResult.OwnerDraw = true;
+            lvHashLookupResult.Size = new Size(906, 320);
+            lvHashLookupResult.TabIndex = 35;
+            lvHashLookupResult.UseCompatibleStateImageBehavior = false;
+            lvHashLookupResult.View = View.Details;
             // 
             // columnHeader5
             // 
@@ -530,10 +540,19 @@
             // 
             columnHeader7.Text = "Engines";
             // 
+            // columnHeader9
+            // 
+            columnHeader9.Text = "Threat";
+            columnHeader9.Width = 150;
+            // 
             // columnHeader8
             // 
             columnHeader8.Text = "Scan Result";
-            columnHeader8.Width = 150;
+            columnHeader8.Width = 200;
+            // 
+            // openFileDialog1
+            // 
+            openFileDialog1.FileName = "openFileDialog1";
             // 
             // MainForm
             // 
@@ -553,10 +572,10 @@
             tbMainTabs.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
             tabPage1.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)pbLoading).EndInit();
+            ((System.ComponentModel.ISupportInitialize)pbFileScanLoading).EndInit();
             tpHash.ResumeLayout(false);
             tpHash.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
+            ((System.ComponentModel.ISupportInitialize)pbHashLookupLoading).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -585,12 +604,12 @@
         private TabPage tabPage1;
         private FolderBrowserDialog folderBrowserDialog1;
         private Button btnRefreshStatus;
-        private ScannerListView lvScanResult;
+        private ScannerListView lvFileScanResult;
         private ColumnHeader columnHeader1;
         private ColumnHeader columnHeader2;
         private ColumnHeader columnHeader3;
         private ColumnHeader columnHeader4;
-        private PictureBox pbLoading;
+        private PictureBox pbFileScanLoading;
         private Label label6;
         private ComboBox cbRuleListBox;
         private TabPage tpHash;
@@ -598,8 +617,8 @@
         private RadioButton rbHashListFile;
         private RadioButton rbHashSingle;
         private TextBox tbHashSingle;
-        private PictureBox pictureBox1;
-        private ScannerListView scannerListView1;
+        private PictureBox pbHashLookupLoading;
+        private ScannerListView lvHashLookupResult;
         private ColumnHeader columnHeader5;
         private ColumnHeader columnHeader6;
         private ColumnHeader columnHeader7;
@@ -610,5 +629,8 @@
         private TextBox tbHashFileFolder;
         private TextBox tbHashListFile;
         private Label label7;
+        private ColumnHeader columnHeader9;
+        private ColumnHeader columnHeader10;
+        private OpenFileDialog openFileDialog1;
     }
 }

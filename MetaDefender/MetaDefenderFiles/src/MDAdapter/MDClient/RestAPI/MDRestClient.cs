@@ -23,17 +23,18 @@ namespace MDAdapter.MDClient.RestAPI
         }
 
 
-        private MDResponse ParseGetStatusResult(string json)
+        private MDResponse GetMDResponseFromStatusJSON(JObject parsedJson, string rawJSON)
         {
             MDResponse result = new MDResponse();
-
+           
             try
             {
-                JObject parsedJson = JObject.Parse(json);
                 result.DataId = (string)parsedJson["data_id"];
                 result.FileName = (string)parsedJson["file_info"]["display_name"];
-                result.RawJson = json;
+                result.RawJson = parsedJson.ToString(Newtonsoft.Json.Formatting.None);
                 result.TotalEngines = (string)parsedJson["scan_results"]["total_avs"];
+                result.Threat = (string)parsedJson["threat_name"];
+
 
                 object dlpJSON = parsedJson["dlp_info"];
                 if (dlpJSON != null)
@@ -45,23 +46,50 @@ namespace MDAdapter.MDClient.RestAPI
                     result.ResponseType = "Multi-Scan Result";
                 }
 
-                if (parsedJson["process_info"]["verdicts"] != null)
+                if (parsedJson["process_info"] != null)
                 {
-                    result.Status = "processing";
-                    JArray verdictArray = (JArray)parsedJson["process_info"]["verdicts"];
-
-                    if(verdictArray.Count > 0)
+                    if (parsedJson["process_info"]["verdicts"] != null)
                     {
-                        result.Status = (string)verdictArray[0];
-                    }
+                        result.Status = "processing";
+                        JArray verdictArray = (JArray)parsedJson["process_info"]["verdicts"];
 
+                        if (verdictArray.Count > 0)
+                        {
+                            result.Status = (string)verdictArray[0];
+                        }
+                    }
                 }
             }
             catch (Exception)
             {
-                result.RawJson = json;
+                result.RawJson = rawJSON;
             }
 
+            return result;
+        }
+
+
+
+        private List<MDResponse> ParseGetStatusResultList(string json)
+        {
+            List<MDResponse> result = new List<MDResponse>();
+            JArray parsedJson = JArray.Parse(json);
+            
+            foreach(JObject current in parsedJson)
+            {
+                MDResponse mdResponse = GetMDResponseFromStatusJSON(current, "");
+                result.Add(mdResponse);
+            }
+
+            return result;
+        }
+
+
+
+        private MDResponse ParseGetStatusResult(string json)
+        {
+            JObject parsedJson = JObject.Parse(json);
+            MDResponse result = GetMDResponseFromStatusJSON(parsedJson, json);
 
             return result;
         }
@@ -82,21 +110,24 @@ namespace MDAdapter.MDClient.RestAPI
 
             try
             {
-                FileInfo fileInfo = new FileInfo(filePath);
                 JObject parsedJson = JObject.Parse(json);
                 result.DataId = (string)parsedJson["data_id"];
                 result.Status = (string)parsedJson["status"];
-                result.FileName = fileInfo.Name;
                 result.RawJson = json;
                 result.TotalEngines = "0";
 
-                if(result.Status == null)
+                if (result.Status == null)
                 {
                     result.Status = "inqueue";
                 }
 
+                if (!string.IsNullOrEmpty(filePath))
+                {
+                    FileInfo fileInfo = new FileInfo(filePath);
+                    result.FileName = fileInfo.Name;
+                }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 result.DataId = "Unknown";
                 result.Status = "Failed to Post";
@@ -149,6 +180,32 @@ namespace MDAdapter.MDClient.RestAPI
             string jsonResult = MDRestAPI.GetAnalysisRules(serverEndpoint, apiKey);
             result = ParseAvailableRulesResult(jsonResult);
 
+            return result;
+        }
+
+        public MDResponse LookupHash(string hash)
+        {
+            MDResponse result = null;
+
+            string jsonResult = MDRestAPI.LookupHash(serverEndpoint, apiKey, hash);
+            if (jsonResult != null)
+            {
+                result = ParseGetStatusResult(jsonResult);
+            }
+            else
+            {
+                result = new MDResponse();
+                result.FileName = hash;
+            }
+
+            return result;
+        }
+
+        public List<MDResponse> LookupHashList(List<string> hashList)
+        {
+            string jsonResult = MDRestAPI.LookupHashList(serverEndpoint, apiKey, hashList);
+            List<MDResponse> result = ParseGetStatusResultList(jsonResult);
+            
             return result;
         }
     }

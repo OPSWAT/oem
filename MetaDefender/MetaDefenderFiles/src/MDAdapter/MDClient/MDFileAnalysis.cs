@@ -7,6 +7,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 using MDAdapter.MDAccess;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MDAdapter.MDClient
 {
@@ -137,17 +139,75 @@ namespace MDAdapter.MDClient
         //TODO: Implement these functions tomorrow
         public MDResponse LookupHash(string hash)
         {
-            return new MDResponse();
+            return client.LookupHash(hash);
         }
 
         public List<MDResponse> LookupHashesFromListFile(string listFilePath, int maxEntries)
         {
-            return null;
+            List<MDResponse> result = new List<MDResponse>();
+            TextReader reader = new StreamReader(listFilePath);
+
+            for(int i=0; i < maxEntries; i++)
+            {
+                string line = reader.ReadLine();
+                MDResponse currentLineResponse = client.LookupHash(line);
+                result.Add(currentLineResponse);
+            }
+
+            return result;
+        }
+
+
+        private static string GetMd5HashOfFile(string filePath)
+        {
+            string result = null;
+
+            try
+            {
+                using (var md5 = MD5.Create())
+                {
+                    using (var stream = File.OpenRead(filePath))
+                    {
+                        byte[] hashBytes = md5.ComputeHash(stream);
+                        StringBuilder sb = new StringBuilder();
+                        foreach (byte b in hashBytes)
+                        {
+                            sb.Append(b.ToString("x2"));
+                        }
+                        result = sb.ToString();
+                    }
+                }
+            }
+            catch (Exception) { }
+
+            return result;
         }
 
         public List<MDResponse> LookupHashesFileFolder(string fileFolderPath, int maxEntries)
         {
-            return null;
+            List<MDResponse> result = new List<MDResponse>();
+
+            DirectoryInfo directoryInfo = new DirectoryInfo(fileFolderPath);
+
+            int count = 0;
+            foreach (FileInfo fileInfo in directoryInfo.GetFiles())
+            {
+                string md5Hash = GetMd5HashOfFile(fileInfo.FullName);
+
+                if (!string.IsNullOrEmpty(md5Hash))
+                {
+                    MDResponse currentLineResponse = client.LookupHash(md5Hash);
+                    result.Add(currentLineResponse);
+
+                    if (count >= maxEntries)
+                    {
+                        break;
+                    }
+                    count++;
+                }
+            }
+
+            return result;
         }
 
     }

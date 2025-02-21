@@ -6,7 +6,9 @@
 ///  OPSWAT OEM Solutions Architect
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+using MetaDefenderCommonSdk.Client;
 using System.Net;
+using System.Text;
 
 namespace MDAdapter.MDClient.RestAPI
 {
@@ -49,16 +51,12 @@ namespace MDAdapter.MDClient.RestAPI
         }
 
 
-
-
-        /*
-        public static string SubmitHash(string hash, string serverEndpoint, string apikey)
+        public static string LookupHash(string serverEndpoint, string apikey, string hash)
         {
-            string result = null;
-
             // https://api.metadefender.com/v4/hash/6A5C19D9FFE8804586E8F4C0DFCC66DE
-            string requestUrl = ServerURL + "/hash/" + hash;
             //string requestUrl = "https://api.metadefender.com/v4/hash/4EE607983947E486DBE488B1731C01C1AEEFEDD82619FDF35DBF2E52DFA32D41";
+            string result = null;
+            string requestUrl = serverEndpoint + "/hash/" + hash;
 
             try
             {
@@ -66,8 +64,7 @@ namespace MDAdapter.MDClient.RestAPI
                 //ComponentResposne reference = null;
                 using (var httpClient = new HttpClient())
                 {
-                    httpClient.DefaultRequestHeaders.Add("apiKey", ApiKey);
-                    //httpClient.DefaultRequestHeaders.Add("skippartialresults", "1");
+                    httpClient.DefaultRequestHeaders.Add("apiKey", apikey);
 
                     var response = httpClient.GetAsync(requestUrl).Result;
                     string responseText = response.StatusCode + ":" + response.ReasonPhrase;
@@ -83,7 +80,66 @@ namespace MDAdapter.MDClient.RestAPI
 
             return result;
         }
-        */
+
+
+        private static string GetJsonFromHashArray(List<string> hashList)
+        {
+            StringBuilder result = new StringBuilder();
+
+            result.Append("{\"hash\":[");
+
+            bool isFirst = true;
+            foreach (string hash in hashList)
+            {
+                if (!isFirst)
+                {
+                    result.Append(",");
+                }
+
+                result.Append("\"");
+                result.Append(hash);
+                result.Append("\"");
+                isFirst = false;
+            }
+
+            result.Append("]}");
+
+            return result.ToString();
+        }
+
+               
+        public static string LookupHashList(string serverEndpoint, string apikey, List<string> hashList)
+        {
+            string result = null;
+            string requestUrl = serverEndpoint + "/hash";
+
+            try
+            {
+                string hashListJson = GetJsonFromHashArray(hashList);
+                StringContent hashJsonBody = new StringContent(hashListJson);
+
+                using (var httpClient = new HttpClient())
+                {
+                    httpClient.DefaultRequestHeaders.Add("apiKey", apikey);
+                    httpClient.DefaultRequestHeaders.Add("includescandetails", "1");
+
+
+                    var response = httpClient.PostAsync(requestUrl,hashJsonBody).Result;
+                    string responseText = response.StatusCode + ":" + response.ReasonPhrase;
+
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        result = response.Content.ReadAsStringAsync().Result;
+                    }
+                }
+            }
+            catch (Exception)
+            { }
+
+            return result;
+        }
+
+
 
         public static string GetAnalysisResult(string serverEndpoint, string apikey, string dataID)
         {

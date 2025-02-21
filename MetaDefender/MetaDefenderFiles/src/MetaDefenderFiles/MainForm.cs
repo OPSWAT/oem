@@ -13,7 +13,6 @@ namespace MetaDefenderFiles
 {
     public partial class MainForm : Form
     {
-        private List<MDResponse> processFileList = new List<MDResponse>();
         private BackgroundWorker fileScanWorker;
         private BackgroundWorker fileStatusWorker;
 
@@ -24,20 +23,22 @@ namespace MetaDefenderFiles
         public MainForm()
         {
             InitializeComponent();
-            HideLoading();
+            HideLoading(pbFileScanLoading);
+            HideLoading(pbHashLookupLoading);
+
             LoadSettings();
             InitializeBackgroundWorkers();
         }
 
 
-        private void HideLoading()
+        private void HideLoading(PictureBox loadingPix)
         {
-            pbLoading.Visible = false;
+            loadingPix.Visible = false;
         }
 
-        private void ShowLoading()
+        private void ShowLoading(PictureBox loadingPix)
         {
-            pbLoading.Visible = true;
+            loadingPix.Visible = true;
         }
 
         // Set up the BackgroundWorker object by
@@ -69,7 +70,7 @@ namespace MetaDefenderFiles
             HashLookupWorker_Completed);
 
         }
-                 
+
 
         private void LoadSettings()
         {
@@ -150,6 +151,8 @@ namespace MetaDefenderFiles
             tbHashListFile.Text = settings.HashFile;
             tbHashFileFolder.Text = settings.HashFileFolder;
 
+
+            tbMainTabs.SelectTab(settings.SelectionTab);
         }
 
         private void SaveSettings()
@@ -158,6 +161,15 @@ namespace MetaDefenderFiles
             settings.Apikey = tbApiKey.Text;
             settings.ServerEndpoint = tbServerEndpoint.Text;
             settings.ScanFolder = tbTargetFolderPath.Text;
+
+            if (tbMainTabs.SelectedTab == tabPage1)
+            {
+                settings.SelectionTab = 0;
+            }
+            else if (tbMainTabs.SelectedTab == tpHash)
+            {
+                settings.SelectionTab = 1;
+            }
 
             if (rbCloudEndpoint.Checked)
             {
@@ -221,10 +233,10 @@ namespace MetaDefenderFiles
             try
             {
                 FileEnvironment fe = (FileEnvironment)e.Argument;
-                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint, fe.Apikey);
 
-                List<MDResponse> processFileTempResult = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, fe.Rule);
-                processFileList = processFileTempResult;
+                List<MDResponse> mdResponseList = fileAnalyzer.ProcessFolder(tbTargetFolderPath.Text, fe.Rule);
+                e.Result = mdResponseList;
             }
             catch (Exception runningException)
             {
@@ -234,8 +246,22 @@ namespace MetaDefenderFiles
 
         private void FileScanWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
-            UpdateFileScanList();
-            HideLoading();
+            List<MDResponse> responseList = e.Result as List<MDResponse>;
+            UpdateStatusListView(lvFileScanResult, responseList);
+            HideLoading(pbFileScanLoading);
+        }
+
+        private List<MDResponse> GetMDResponseListFromView(ListView listView)
+        {
+            List<MDResponse> responseList = new List<MDResponse>();
+
+            foreach (ListViewItem item in listView.Items)
+            {
+                MDResponse mdResponse = item.Tag as MDResponse;
+                responseList.Add(mdResponse);
+            }
+
+            return responseList;
         }
 
 
@@ -244,10 +270,11 @@ namespace MetaDefenderFiles
             try
             {
                 FileEnvironment fe = (FileEnvironment)e.Argument;
-                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint, fe.Apikey);
 
-                List<MDResponse> processFileTempResult = fileAnalyzer.UpdateStatusOnResponseList(processFileList);
-                processFileList = processFileTempResult;
+                List<MDResponse> mdResponseList = fileAnalyzer.UpdateStatusOnResponseList(fe.MdResponseList);
+                e.Result = mdResponseList;
+
             }
             catch (Exception runningException)
             {
@@ -258,8 +285,9 @@ namespace MetaDefenderFiles
 
         private void FileStatusWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
-            UpdateFileScanList();
-            HideLoading();
+            List<MDResponse> responseList = e.Result as List<MDResponse>;
+            UpdateStatusListView(lvFileScanResult, responseList);
+            HideLoading(pbFileScanLoading);
         }
 
 
@@ -274,24 +302,24 @@ namespace MetaDefenderFiles
             {
                 int maxEntries = 100;
                 HashEnvironment he = (HashEnvironment)e.Argument;
-                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(he.ServerEndpoint,he.Apikey);
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(he.ServerEndpoint, he.Apikey);
 
 
                 List<MDResponse> result = new List<MDResponse>();
 
-                if(he.HashProcess == MDHashProcess.single)
+                if (he.HashProcess == MDHashProcess.single)
                 {
                     MDResponse singleResponse = fileAnalyzer.LookupHash(he.Single);
-                    if(singleResponse != null)
+                    if (singleResponse != null)
                     {
                         result.Add(singleResponse);
                     }
                 }
-                else if(he.HashProcess == MDHashProcess.listfile)
+                else if (he.HashProcess == MDHashProcess.listfile)
                 {
                     result = fileAnalyzer.LookupHashesFromListFile(he.ListFile, maxEntries);
                 }
-                else if(he.HashProcess == MDHashProcess.filefolder)
+                else if (he.HashProcess == MDHashProcess.filefolder)
                 {
                     result = fileAnalyzer.LookupHashesFileFolder(he.FileFolder, maxEntries);
                 }
@@ -307,8 +335,8 @@ namespace MetaDefenderFiles
         private void HashLookupWorker_Completed(object sender, RunWorkerCompletedEventArgs e)
         {
             List<MDResponse> responseList = e.Result as List<MDResponse>;
-            HideLoading();
-            UpdateFileScanList();
+            HideLoading(pbHashLookupLoading);
+            UpdateStatusListView(lvHashLookupResult, responseList);
         }
 
         private string GetServerAddress()
@@ -318,9 +346,10 @@ namespace MetaDefenderFiles
             //
             string result = "https://api.metadefender.com/v4";
 
-            if(rbOnPremEndpoint.Checked)
+            if (rbOnPremEndpoint.Checked)
             {
                 result = tbServerEndpoint.Text;
+                result = "No Entry";
             }
 
             return result;
@@ -420,6 +449,8 @@ namespace MetaDefenderFiles
             result.Rule = GetMDRule();
             result.ServerEndpoint = GetServerAddress();
             result.Apikey = tbApiKey.Text;
+            result.MdResponseList = GetMDResponseListFromView(lvFileScanResult);
+
             SaveSettings();
 
             return result;
@@ -436,34 +467,34 @@ namespace MetaDefenderFiles
             result.ListFile = tbHashListFile.Text;
             result.FileFolder = tbHashFileFolder.Text;
 
-            result.ServerEndpoint = GetServerAddress(); 
+            result.ServerEndpoint = GetServerAddress();
             result.Apikey = tbApiKey.Text;
+
+            SaveSettings();
 
             return result;
         }
 
-
-
-        private void UpdateFileScanList()
+        private void UpdateStatusListView(ListView destView, List<MDResponse> responseList)
         {
+            destView.Items.Clear();
 
-            foreach (MDResponse current in processFileList)
+            foreach (MDResponse current in responseList)
             {
                 ListViewItem item = new ListViewItem(current.FileName);
                 item.SubItems.Add(current.Status);
                 item.SubItems.Add(current.TotalEngines);
+                item.SubItems.Add(current.Threat);
                 item.SubItems.Add(current.ResponseType);
                 item.Tag = current;
 
-                lvScanResult.Items.Add(item);
-
+                destView.Items.Add(item);
             }
         }
 
         private void btnProcessFiles_Click(object sender, EventArgs e)
         {
-            lvScanResult.Items.Clear();
-            ShowLoading();
+            ShowLoading(pbFileScanLoading);
 
             FileEnvironment fe = GetFileEnvironment();
             fileScanWorker.RunWorkerAsync(fe);
@@ -477,8 +508,7 @@ namespace MetaDefenderFiles
 
         private void btnRefreshStatus_Click(object sender, EventArgs e)
         {
-            lvScanResult.Items.Clear();
-            ShowLoading();
+            ShowLoading(pbFileScanLoading);
 
             FileEnvironment fe = GetFileEnvironment();
             fileStatusWorker.RunWorkerAsync(fe);
@@ -494,7 +524,7 @@ namespace MetaDefenderFiles
             if (cbRuleListBox.Items.Count <= 1)
             {
                 FileEnvironment fe = GetFileEnvironment();
-                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint,fe.Apikey);
+                MDFileAnalysis fileAnalyzer = GetFileAnalyzer(fe.ServerEndpoint, fe.Apikey);
                 MDRuleList ruleList = fileAnalyzer.GetRuleList();
 
                 cbRuleListBox.Items.Clear();
@@ -510,7 +540,7 @@ namespace MetaDefenderFiles
         {
             HashEnvironment hashEnvironment = GetHashEnvironment();
 
-            ShowLoading();
+            ShowLoading(pbHashLookupLoading);
             hashLookupWorker.RunWorkerAsync(hashEnvironment);
         }
 
@@ -557,6 +587,18 @@ namespace MetaDefenderFiles
         private void rbHashFileFolder_CheckedChanged(object sender, EventArgs e)
         {
             HashRadioButtonChanged();
+        }
+
+        private void btnHashFileFolder_Click(object sender, EventArgs e)
+        {
+            folderBrowserDialog1.ShowDialog();
+            tbHashFileFolder.Text = folderBrowserDialog1.SelectedPath;
+        }
+
+        private void btnHashListFile_Click(object sender, EventArgs e)
+        {
+            openFileDialog1.ShowDialog();
+            tbHashListFile.Text = openFileDialog1.FileName;
         }
     }
 }

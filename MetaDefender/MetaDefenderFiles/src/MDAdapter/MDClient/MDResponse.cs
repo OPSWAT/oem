@@ -19,6 +19,7 @@ namespace MDAdapter.MDClient
         public string RawJson;
         public string TotalEngines;
         public string ResponseType;
+        public string Threat;
 
         public MDResponse()
         {

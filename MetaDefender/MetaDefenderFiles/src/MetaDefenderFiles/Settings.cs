@@ -15,6 +15,9 @@ namespace MetaDefenderFiles
     {
         private string serverEndpoint;
         private string apikey;
+        private int    selectionTab;
+        
+        
         private string scanFolder;
         private string rule;
         private bool   cloudEndpoint;
@@ -24,6 +27,7 @@ namespace MetaDefenderFiles
         private string hashSingle;
         private string hashFile;
         private string hashFileFolder;
+
 
 
 
@@ -37,6 +41,7 @@ namespace MetaDefenderFiles
         public string HashSingle { get => hashSingle; set => hashSingle = value; }
         public string HashFile { get => hashFile; set => hashFile = value; }
         public string HashFileFolder { get => hashFileFolder; set => hashFileFolder = value; }
+        public int SelectionTab { get => selectionTab; set => selectionTab = value; }
 
         public void Serialize()
         {

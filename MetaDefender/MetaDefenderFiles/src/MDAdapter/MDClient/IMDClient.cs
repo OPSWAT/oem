@@ -19,5 +19,9 @@ namespace MDAdapter.MDAccess
         public MDResponse PostFile(string filePath, MDRule rule);
 
         public MDRuleList GetAvailableRules();
+
+        public MDResponse LookupHash(string hash);
+
+        public List<MDResponse> LookupHashList(List<string> hashList);
     }
 }

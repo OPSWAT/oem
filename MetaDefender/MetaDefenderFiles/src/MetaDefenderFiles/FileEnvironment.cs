@@ -14,9 +14,11 @@ namespace MetaDefenderFiles
         MDRule rule;
         string serverEndpoint;
         string apikey;
+        List<MDResponse> mdResponseList;
 
         public MDRule Rule { get => rule; set => rule = value; }
         public string ServerEndpoint { get => serverEndpoint; set => serverEndpoint = value; }
         public string Apikey { get => apikey; set => apikey = value; }
+        public List<MDResponse> MdResponseList { get => mdResponseList; set => mdResponseList = value; }
     }
 }

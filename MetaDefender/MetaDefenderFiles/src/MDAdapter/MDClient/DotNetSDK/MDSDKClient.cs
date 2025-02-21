@@ -80,5 +80,15 @@ namespace MDAdapter.MDClient.DotNetSDK
         {
             throw new NotImplementedException();
         }
+
+        public MDResponse LookupHash(string hash)
+        {
+            throw new NotImplementedException();
+        }
+
+        public List<MDResponse> LookupHashList(List<string> hashList)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
