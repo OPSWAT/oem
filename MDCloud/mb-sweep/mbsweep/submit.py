@@ -19,6 +19,16 @@ from .config import (
 # ---------------------------------------------------------------------------
 # MetaDefender Cloud
 # ---------------------------------------------------------------------------
+class LocalFileUnavailable(Exception):
+    """
+    The file could not be read locally, so nothing was submitted.
+
+    Distinct from an API rejection: the service never saw the file. Raised as
+    its own type so one intercepted sample costs one row rather than aborting
+    a run that may already have a dozen results in flight.
+    """
+
+
 def mdc_submit(api_key, file_path, sandbox=None, rule=None, archive_password=None):
     """POST /v4/file. Returns the data_id, or raises with a clear message."""
     headers = {
@@ -33,8 +43,22 @@ def mdc_submit(api_key, file_path, sandbox=None, rule=None, archive_password=Non
     if archive_password:
         headers["archivepwd"] = archive_password
 
-    with open(file_path, "rb") as f:
-        resp = requests.post(f"{MDC_BASE_URL}/file", headers=headers, data=f.read())
+    try:
+        with open(file_path, "rb") as handle:
+            payload = handle.read()
+    except OSError as exc:
+        # Local AV is the usual culprit on a malware corpus: real-time
+        # protection quarantines the archive between the download completing
+        # and this read, which surfaces as "Invalid argument" while the file is
+        # being removed, then as "file not found" once it is gone.
+        raise LocalFileUnavailable(
+            f"could not read {os.path.basename(file_path)}: {exc}. "
+            f"On a malware corpus this is almost always local anti-virus "
+            f"removing the file after download - check your AV quarantine log "
+            f"for this path."
+        )
+
+    resp = requests.post(f"{MDC_BASE_URL}/file", headers=headers, data=payload)
 
     if resp.status_code == 429:
         raise RuntimeError(
@@ -148,8 +172,12 @@ def submit_one(api_key, sample, file_path, want_av, want_cdr, archive_password):
             entry["cdr_data_id"] = mdc_submit(
                 api_key, file_path, rule="cdr",
                 archive_password=archive_password)
-    except (RuntimeError, requests.RequestException) as exc:
+    except (LocalFileUnavailable, RuntimeError, OSError,
+            requests.RequestException) as exc:
         entry["error"] = str(exc)
         entry["stage"] = "submit failed"
+        # The poller skips entries that already failed, so the outcome must
+        # carry the error too or the row reaches the report looking analysed.
+        entry["outcome"]["error"] = str(exc)
 
     return entry

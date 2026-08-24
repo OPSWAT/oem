@@ -612,6 +612,42 @@ A heads-up is printed before anything is submitted, so the cost is visible up fr
 
 Worth raising with the engine team: a job that cannot complete should fail rather than hang.
 
+## Local anti-virus will eat the corpus
+
+The samples are real malware, so the endpoint's own AV will act on them. On Windows Defender the
+sequence is: the archive downloads, real-time protection detects it, and the file is quarantined
+before the tool can submit it. It surfaces as an `OSError` on the read — `[Errno 22] Invalid
+argument` while removal is in progress, or `[Errno 2] No such file` once it is gone:
+
+```
+OSError: [Errno 22] Invalid argument: 'C:\mb-sweeps\...\9f288a6b....zip'
+```
+
+Confirm it in the AV log rather than guessing. On Defender:
+
+```
+Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending |
+  Select-Object -First 5 InitialDetectionTime, ThreatID, Resources
+```
+
+A matching entry naming the exact path (`Trojan:Script/Wacatac.C!ml`, for instance) is the
+confirmation. Note that MalwareBazaar archives are password-encrypted, so Defender is not reading
+inside them — it recognises the container itself.
+
+**One interception costs one sample, not the run.** The read failure is caught, recorded against
+that sample with an explanation, and the sweep continues:
+
+```
+! could not read 9f288a6b....zip: [Errno 2] No such file or directory. On a malware corpus
+  this is almost always local anti-virus removing the file after download - check your AV
+  quarantine log for this path.
+```
+
+To keep a corpus intact you need the download directory excluded from real-time scanning. That is
+a deliberate weakening of endpoint protection on that path, so it is your call and needs admin
+rights - the tool will not do it for you. The alternatives are to accept partial corpora, or to
+run the sweep on a dedicated analysis VM where the exclusion is a smaller concession.
+
 ## Troubleshooting
 
 **`HTTP 502` from MalwareBazaar.** Common and usually transient — abuse.ch drops whole query
