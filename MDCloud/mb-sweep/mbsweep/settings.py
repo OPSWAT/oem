@@ -40,6 +40,7 @@ SETTING_TYPES = {
     "signatures": str,
     "tags": str,
     "file_types": str,
+    "exclude_types": str,
     "query_workers": int,
     "query_limit": int,
     "max_size": float,

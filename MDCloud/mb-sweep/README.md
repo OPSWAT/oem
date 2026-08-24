@@ -568,6 +568,27 @@ Where an archive produced child reports, the dossier also prints the chain with 
 
 Each run writes `mb-sweep-<stamp>.{md,csv,json}`. The Markdown report leads with a detection-coverage table and then a **"Rated below SUSPICIOUS"** table — the samples worth investigating. Note the `chain_depth` column: archives produce a parent report for the container plus children for the extracted content, and the container is inert, so the sweep reports the **most severe verdict anywhere in the chain** rather than the parent's. A missed detection with a shallow chain may mean extraction failed rather than that detection did.
 
+## Unsupported file types are left out
+
+The sandbox's documented detonation targets are PE (`.exe .dll .com .cpl .ocx .drv .sys .efi
+.msi .msp`), ELF, macOS binaries and `.pdf`. **APKs are not detonated**, so selecting one spends a
+sandbox run to learn nothing.
+
+`exclude_types` (default `apk`) drops those candidates during selection, and `apk` is no longer
+queried in the default tag sweep — there is no point fetching metadata for a type that will then
+be discarded. When APK support lands, clear the setting rather than editing code:
+
+```
+exclude_types =            # in mb-sweep.conf
+--exclude-types ""         # for a single run
+```
+
+As with every other narrowing, the exclusion is reported rather than silent:
+
+```
+[+] 97 candidate(s) excluded as unsupported by the sandbox (97 x .apk); --exclude-types changes the list
+```
+
 ## Nested archives: the one failure mode to know about
 
 Every sample arrives inside an `infected`-encrypted zip. When the sample is **itself an archive**

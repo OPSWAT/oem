@@ -49,7 +49,7 @@ DEFAULT_TAGS = [
     # Container formats used to smuggle payloads past mail filters
     "iso", "zip", "rar", "7z",
     # Binaries, for contrast
-    "exe", "dll", "msi", "apk", "elf",
+    "exe", "dll", "msi", "elf",
 ]
 
 
@@ -263,3 +263,10 @@ SCAN_CODE_MEANINGS = {
 # The engine looked and reached a conclusion.
 DETECTED_CODES = {1, 2}
 CLEAN_CODES = {0, 4, 7}
+
+
+# File types the sandbox cannot detonate yet. Selecting one spends a sandbox
+# run to learn nothing, so they are excluded by default and the exclusion is
+# reported rather than silent. Override with --exclude-types (empty string
+# disables the filter) when support lands.
+DEFAULT_EXCLUDED_TYPES = "apk"

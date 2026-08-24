@@ -78,6 +78,13 @@ query_workers = 8
 ; already cover the requested day span.
 query_limit = 1000
 
+; File types the sandbox cannot detonate yet, left out so a run does not
+; spend a sandbox submission to learn nothing. APK is excluded because
+; Android packages are not supported; the documented detonation targets are
+; PE, ELF, macOS binaries and PDF. Set to an empty value to disable the
+; filter once support lands.
+exclude_types = apk
+
 ; --- Execution ------------------------------------------------------------
 ; Everything is submitted first, then polled together. Anything without a
 ; result when the window closes is recorded as an error, never as a pass.
