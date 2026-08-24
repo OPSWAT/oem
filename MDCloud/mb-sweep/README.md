@@ -634,6 +634,28 @@ A matching entry naming the exact path (`Trojan:Script/Wacatac.C!ml`, for instan
 confirmation. Note that MalwareBazaar archives are password-encrypted, so Defender is not reading
 inside them — it recognises the container itself.
 
+**A lost sample is replaced, not just skipped.** Selection picks spare candidates up front —
+choosing them costs nothing, since nothing is downloaded until one is needed — so when a sample
+disappears the run moves to the next candidate and still delivers the corpus size you asked for:
+
+```
+[1/2] d7066697d8e7c6b4...  (unnamed)  ps1  first seen 2026-08-24
+    ! unavailable: file disappeared immediately after download; local anti-virus most
+      likely quarantined it
+      -> substituting f0f181cd31979240... (js, VIPKeylogger)
+
+[2/3] 97b2010e1866b7af...  ValleyRAT  dll   -> submitted
+[3/3] f0f181cd31979240...  VIPKeylogger  js -> submitted
+
+[+] 2 of 3 submission(s) accepted (1 sample(s) replaced after being lost locally)
+```
+
+The lost sample still appears in the report as an error. A silent substitution would overstate
+what the run actually covered, so both facts are kept: what was attempted, and what was analysed.
+Substitution applies to malware only — a clean control is a specific file chosen deliberately, not
+one of an interchangeable pool — and a `--from-dir` re-run has no spares, since it can only submit
+what the folder retained.
+
 **One interception costs one sample, not the run.** The read failure is caught, recorded against
 that sample with an explanation, and the sweep continues:
 

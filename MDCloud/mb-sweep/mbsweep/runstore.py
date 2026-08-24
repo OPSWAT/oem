@@ -55,6 +55,9 @@ def read_manifest(directory):
     for entry in entries:
         archive = os.path.join(samples_dir, f"{entry['sha256']}.zip")
         if os.path.isfile(archive):
+            # Attach the path to the record itself: the submission loop can
+            # substitute samples, so positional pairing would not survive.
+            entry["local_archive"] = archive
             paired.append((entry, archive))
         else:
             missing += 1
