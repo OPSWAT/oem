@@ -1,0 +1,115 @@
+; ---------------------------------------------------------------------------
+; malwarebazaar-sweep configuration - SAMPLE
+;
+; Copy to mb-sweep.conf and fill in the two keys. That file is read
+; automatically, so a routine run becomes:
+;
+;     python malwarebazaar-sweep.py
+;
+; Precedence: built-in defaults, then this file, then command-line flags. So
+; anything here can be overridden for a one-off without editing the file:
+;
+;     python malwarebazaar-sweep.py --malware-count 20 --dry-run
+;
+; mb-sweep.conf holds live API keys. Keep it out of source control and out of
+; anything you share - the .gitignore beside this file already excludes it, and
+; only this .sample is distributed.
+; ---------------------------------------------------------------------------
+
+[sweep]
+
+; --- Credentials ----------------------------------------------------------
+; MetaDefender Cloud API key. Free tier at
+; https://metadefender.opswat.com/account - check limit_sandbox on
+; GET /v4/apikey before asking for a large corpus.
+api_key = PUT-YOUR-METADEFENDER-CLOUD-KEY-HERE
+
+; MalwareBazaar Auth-Key from https://bazaar.abuse.ch/account/
+; Every abuse.ch API call needs this, metadata queries included.
+mb_key = PUT-YOUR-ABUSE-CH-AUTH-KEY-HERE
+
+; --- Corpus size ----------------------------------------------------------
+; Malware samples to pull from MalwareBazaar. Each costs one sandbox run plus
+; two scan submissions (AV and CDR).
+malware_count = 5
+
+; Samples taken per calendar day, working backwards from today. Together with
+; malware_count this sets how far back the corpus reaches: 5 at 3/day spans
+; two days.
+per_day = 3
+
+; Known-clean controls. Detections on these are false positives, reported
+; separately from missed detections. Set both: clean PEs never enter Deep CDR,
+; so only documents exercise that path.
+clean_pe_count = 5
+clean_docs = 5
+
+; Optional folder of your own known-good files, submitted as extra controls.
+; clean_dir = C:\goodware
+
+; Skip samples larger than this, in MB. Large files slow a run without
+; improving coverage. 0 disables the limit; MetaDefender caps uploads at 256.
+max_size = 32
+
+; --- Locations ------------------------------------------------------------
+; Each run writes to <out_dir>\<YYYY-MM-DD>\ holding samples\, manifest.json
+; and the reports. Keep this shallow on Windows: sample files are named
+; <64-char sha256>.zip and a deep root trips the 260-character path limit.
+out_dir = C:\mb-sweeps
+
+; Hashes already submitted, so repeat runs widen coverage instead of
+; re-scanning. Defaults to <out_dir>\mb-sweep-state.json.
+; state = C:\mb-sweeps\mb-sweep-state.json
+
+; --- Discovery ------------------------------------------------------------
+; Malware families and tags to query. Leave blank for the built-in lists,
+; which are deliberately weighted away from PE files.
+; signatures = AsyncRAT,Vidar,LummaStealer,AgentTesla
+; tags = docx,xlsx,pdf,lnk,js,iso,exe
+
+; Restrict the corpus to specific MalwareBazaar file types.
+; file_types = docx,xlsx,pdf,lnk
+
+; Concurrent MalwareBazaar queries. Discovery is the slowest phase; this is
+; what makes it quick. The ceiling is politeness to abuse.ch.
+query_workers = 8
+
+; Rows requested per family query. Only used when the cheap tag queries do not
+; already cover the requested day span.
+query_limit = 1000
+
+; --- Execution ------------------------------------------------------------
+; Everything is submitted first, then polled together. Anything without a
+; result when the window closes is recorded as an error, never as a pass.
+poll_interval = 60
+poll_window = 15
+
+; Pause between MalwareBazaar downloads, to respect their rate limits.
+delay = 2
+
+; --- Switches (true/false) ------------------------------------------------
+; Skip the AV or CDR pass. Each saves one submission per file, at the cost of
+; the column that makes a result actionable.
+no_av = false
+no_cdr = false
+
+; By default each clean control is copied and cosmetically altered so its hash
+; is unique - MetaDefender caches by hash, and a stock system file may be
+; reputation-allowlisted, either of which returns a clean answer without a
+; real analysis. Set true to submit controls byte-for-byte.
+no_mutate_clean = false
+
+; Delete each archive once submitted. Makes the run unrepeatable: --from-dir
+; will find nothing. Prefer pruning old dated folders.
+delete_after = false
+
+; Permit an out_dir that looks like a synced cloud folder. Off for a reason:
+; malware landing in OneDrive or SharePoint replicates to corporate storage.
+allow_synced_dir = false
+
+; Samples that are themselves archives (zip/rar/7z/...) are excluded by
+; default. They arrive inside the encrypted container, so the sandbox has to
+; open a second archive it has no password for: 3 of 4 produced no verdict at
+; all in testing while consuming a sandbox run each. Set true to include them -
+; one of the four did resolve, so the door is left open.
+include_nested_archives = false

@@ -9,13 +9,14 @@ This repository is maintained by OPSWAT as a learning and starting point for OEM
 ```
 oem/
 ├── MDCloud/
-│   └── python/         # MetaDefender Cloud API v4 — Python samples
+│   ├── python/         # MetaDefender Cloud API v4 — Python samples
+│   └── mb-sweep/       # MalwareBazaar detection-coverage harness (self-contained)
 └── MetaDefender/       # MetaDefender Core / on-prem integration samples
 ```
 
 | Folder | Contents | Target audience |
 |---|---|---|
-| [`MDCloud/python`](./MDCloud/python) | Standalone Python scripts for MetaDefender Cloud API v4: multi-scan, Deep CDR, Proactive DLP, Aether sandbox (file and URL), hash-based sandbox lookup. | Developers integrating cloud-based file/URL security into SaaS, web apps, or back-end services. |
+| [`MDCloud/python`](./MDCloud/python) | Standalone Python scripts for MetaDefender Cloud API v4: multi-scan, Deep CDR, Proactive DLP, Aether sandbox (file and URL), hash-based sandbox lookup, sandbox IOC extraction. | Developers integrating cloud-based file/URL security into SaaS, web apps, or back-end services. |
 | [`MetaDefender`](./MetaDefender) | Samples targeting on-premises MetaDefender Core (primarily C#). | Developers embedding MetaDefender Core into desktop or server applications, custom engines, or air-gapped environments. |
 
 Each subfolder has its own README with setup instructions and per-sample documentation.

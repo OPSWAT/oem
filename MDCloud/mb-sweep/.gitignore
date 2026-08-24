@@ -1,0 +1,12 @@
+# The live config holds real API keys. Only the .sample is distributed.
+mb-sweep.conf
+
+# Run output: reports, state, and directories of live (encrypted) malware.
+mb-sweeps/
+mb-sweep-state.json
+mb-sweep-*.md
+mb-sweep-*.csv
+mb-sweep-*.json
+
+__pycache__/
+*.pyc
