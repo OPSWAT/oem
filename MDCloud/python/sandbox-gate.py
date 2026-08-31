@@ -173,7 +173,7 @@ class GateResult:
     """One file's gate decision, with the timings behind it."""
 
     def __init__(self, path, verdict, capabilities, notes, wall_ms, engine_ms,
-                 error=None, ignored=None):
+                 error=None, ignored=None, signer=None):
         self.path = path
         self.verdict = verdict
         self.capabilities = capabilities
@@ -184,11 +184,16 @@ class GateResult:
         # Capabilities found but below the severity floor. Kept so the report can
         # say what was set aside rather than dropping it silently.
         self.ignored = ignored or []
+        # The signing identity the scanner attached, when the file is a signed
+        # executable. Recorded per file so a later distrust entry can be applied
+        # retroactively: one query over the CSV by spki finds everything that
+        # passed under a stolen key. See docs/trust.md in content-detect.
+        self.signer = signer or {}
 
     @property
     def submit(self):
         """True when this file must go to the sandbox."""
-        return self.verdict not in WITHHOLD_VERDICTS
+        return self.verdict not in WITHHOLD_VERDICTS and self.verdict != "trusted_bypass"
 
     @property
     def reason(self):
@@ -294,7 +299,65 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
         wall,
         float(report.get("elapsed_ms", 0)),
         ignored=ignored,
+        signer=report.get("signer"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Trust policy
+# ---------------------------------------------------------------------------
+# Publisher trust levels, weakest first, for the --trust-min-level comparison.
+TRUST_LEVELS = ["provisional", "standard", "high"]
+
+
+def trust_bypass_reason(result, args, eligible_counter):
+    """
+    The one place trust can turn a submit into a skip, and the rules that
+    bound it. Returns a reason string when the file may skip the sandbox,
+    None otherwise.
+
+    Hard rules, not configurable, in order:
+
+      1. The signature must be VERIFIED. Stage 1 scanners report claims
+         (verified: false), and a claim is forgeable - a certificate chain can
+         be copied out of a signed file into malware. So with today's engine
+         this function never returns a reason, whatever the flags say: the
+         policy surface exists ahead of the capability, not behind it.
+      2. A distrusted identity never skips, whatever else matches.
+      3. Trust only excuses BEING an executable. Any finding beyond
+         executable_file - a capability, an indicator, anything - forces the
+         sandbox regardless of who signed the file.
+      4. An indeterminate scan never skips: "could not look" is not "clean".
+
+    Then the knobs: --trust-bypass must be on, the publisher's level must meet
+    --trust-min-level, the key must be active, and 1 in --trust-sample
+    eligible files detonates anyway - the only control that reaches inside a
+    stolen key's pre-disclosure window. docs/trust.md has the full argument.
+    """
+    if not args.trust_bypass:
+        return None
+    signer = result.signer
+    if not signer or not signer.get("verified"):
+        return None                                   # rule 1: claims never grant
+    if signer.get("distrusted"):
+        return None                                   # rule 2
+    if result.verdict != "needs_further_processing":
+        return None                                   # rule 4 (clean/indeterminate)
+    if set(result.capabilities) - {"executable_file"}:
+        return None                                   # rule 3
+    level = signer.get("publisher_trust")
+    if level not in TRUST_LEVELS:
+        return None
+    if TRUST_LEVELS.index(level) < TRUST_LEVELS.index(args.trust_min_level):
+        return None
+    if signer.get("key_status") != "active":
+        return None
+
+    eligible_counter[0] += 1
+    if args.trust_sample > 0 and eligible_counter[0] % args.trust_sample == 0:
+        return None                                   # the sampled detonation
+    return "TRUSTED_BYPASS: %s (%s), key active, signature verified" % (
+        signer.get("publisher"), level)
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +544,14 @@ def report_throughput(results, batched=None):
         print("    This is the number to plan capacity against: one process, or a")
         print("    linked library, amortises the launch away.")
 
+    bypassed = [r for r in results if r.verdict == "trusted_bypass"]
+    if bypassed:
+        print()
+        print(f"  Trusted bypasses              {len(bypassed)}")
+        print("    Provenance TRUSTED_BYPASS, not CLEAN: these files were not")
+        print("    analysed to completion, they were skipped on signer reputation.")
+        print("    The CSV records spki and certificate for retroactive re-triage.")
+
     if withheld:
         saved = len(withheld) * SANDBOX_SECONDS_PER_FILE
         print()
@@ -554,9 +625,12 @@ def write_csv(path, results, labels):
         writer.writerow([
             "file", "decision", "verdict", "capabilities", "expected",
             "file_type", "wall_ms", "engine_ms", "reason",
+            "signer_publisher", "signer_trust", "signer_verified",
+            "signer_spki_sha256", "signer_cert_sha256", "signer_distrusted",
         ])
         for result in results:
             label = label_for(labels, result.path) if labels else None
+            signer = result.signer
             writer.writerow([
                 os.path.basename(result.path),
                 "submit" if result.submit else "withhold",
@@ -567,6 +641,12 @@ def write_csv(path, results, labels):
                 f"{result.wall_ms:.2f}",
                 f"{result.engine_ms:.2f}",
                 result.reason,
+                signer.get("publisher", ""),
+                signer.get("publisher_trust", ""),
+                signer.get("verified", ""),
+                signer.get("spki_sha256", ""),
+                signer.get("cert_sha256", ""),
+                signer.get("distrusted", ""),
             ])
     print(f"\n  per-file rows written to {path}")
 
@@ -598,6 +678,19 @@ def main():
                         help="largest single stream the scanner reads, in MB "
                              "(default: 10; a longer stream is reported "
                              "indeterminate, not clean)")
+    parser.add_argument("--trust-bypass", action="store_true",
+                        help="allow a VERIFIED signature from a trusted publisher to "
+                             "skip the sandbox for files whose only finding is being "
+                             "an executable. Off by default. Inert against a Stage 1 "
+                             "scanner, which never reports verified signatures - see "
+                             "docs/trust.md for the hole this knob opens and its bounds")
+    parser.add_argument("--trust-min-level", choices=TRUST_LEVELS, default="high",
+                        help="minimum publisher trust level for bypass eligibility "
+                             "(default: high)")
+    parser.add_argument("--trust-sample", type=int, default=8,
+                        help="1 in N bypass-eligible files is detonated anyway, the "
+                             "only control that works inside a stolen key's "
+                             "pre-disclosure window (default: 8; 1 disables bypass)")
     parser.add_argument("--min-severity", choices=SEVERITY_ORDER, default="info",
                         help="ignore findings below this severity (default: info, "
                              "which ignores nothing)")
@@ -636,10 +729,20 @@ def main():
     print()
 
     results = []
+    eligible_counter = [0]
     for index, path in enumerate(targets, 1):
         result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
                           archive_password=args.archive_password,
                           max_stream_mb=args.max_stream_mb)
+
+        # Trust is consulted only after the scan, and only to reconsider a
+        # submit. TRUSTED_BYPASS is provenance, never CLEAN: the CSV records
+        # which it was, so the two can never be conflated downstream.
+        if result.submit:
+            bypass = trust_bypass_reason(result, args, eligible_counter)
+            if bypass:
+                result.verdict = "trusted_bypass"
+                result.capabilities = [bypass]
         results.append(result)
 
         decision = "SUBMIT  " if result.submit else "withhold"
