@@ -101,9 +101,11 @@ Copyright: (c) 2026 OPSWAT, Inc. All rights reserved.
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import shutil
+import sqlite3
 import statistics
 import subprocess
 import sys
@@ -173,7 +175,7 @@ class GateResult:
     """One file's gate decision, with the timings behind it."""
 
     def __init__(self, path, verdict, capabilities, notes, wall_ms, engine_ms,
-                 error=None, ignored=None, signer=None):
+                 error=None, ignored=None, signer=None, sha256=None):
         self.path = path
         self.verdict = verdict
         self.capabilities = capabilities
@@ -189,11 +191,15 @@ class GateResult:
         # retroactively: one query over the CSV by spki finds everything that
         # passed under a stolen key. See docs/trust.md in content-detect.
         self.signer = signer or {}
+        # The exact file identity. Populated for PE files, so the known-good
+        # cache and the audit CSV can key on it.
+        self.sha256 = sha256
 
     @property
     def submit(self):
         """True when this file must go to the sandbox."""
-        return self.verdict not in WITHHOLD_VERDICTS and self.verdict != "trusted_bypass"
+        return (self.verdict not in WITHHOLD_VERDICTS
+                and self.verdict not in ("trusted_bypass", "trusted_known_file"))
 
     @property
     def reason(self):
@@ -201,6 +207,8 @@ class GateResult:
             return f"gate failed: {self.error}"
         if self.verdict == "indeterminate":
             return "could not be parsed conclusively"
+        if self.verdict == "trusted_known_file":
+            return self.capabilities[0] if self.capabilities else "TRUSTED_KNOWN_FILE"
         if not self.capabilities:
             if self.ignored:
                 return "only below the floor: " + ", ".join(self.ignored)
@@ -209,7 +217,7 @@ class GateResult:
 
 
 def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info",
-             archive_password=None, max_stream_mb=None):
+             archive_password=None, max_stream_mb=None, verify_signature=False):
     """
     Gate one file and time it.
 
@@ -225,6 +233,8 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
         command += ["--archive-password", archive_password]
     if max_stream_mb:
         command += ["--max-stream-mb", str(max_stream_mb)]
+    if verify_signature:
+        command += ["--verify-signature"]
     if stdin_bytes is None:
         command.append(path)
     else:
@@ -304,10 +314,121 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
 
 
 # ---------------------------------------------------------------------------
+# NSRL known-good hash layer
+# ---------------------------------------------------------------------------
+# The high-confidence fast path needs TWO independent facts, and this supplies
+# the first: the file's SHA-256 is in the NSRL-derived trusted database. The
+# second - a cryptographically valid Authenticode signature to an approved
+# publisher - is supplied by the scanner's verify layer. Neither alone
+# qualifies a file; that AND is the whole defence against stolen certificates.
+
+
+class TrustedHashDb:
+    """
+    Read-only lookup over a trusted-hash database built by nsrl-import.py.
+
+    Opened once and queried per file. A missing or unreadable database is not
+    an error - it means the fast path is simply unavailable, and every file
+    goes through normal analysis, which is the fail-closed default.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.available = False
+        self.release = "none"
+        self._conn = None
+        if not path:
+            return
+        try:
+            self._conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            row = dict(self._conn.execute("SELECT key, value FROM meta"))
+            self.release = row.get("nsrl_release", "unknown")
+            # A trivial probe confirms the table is really there.
+            self._conn.execute("SELECT sha256 FROM trusted_hash LIMIT 1")
+            self.available = True
+        except (sqlite3.Error, OSError) as exc:
+            # Fail closed: no known-good layer, so nothing skips on hash.
+            print(f"  trusted-hash db unavailable ({exc}); fast path disabled")
+            self._conn = None
+
+    def contains(self, sha256_hex):
+        """True when this SHA-256 is a catalogued known-good PE hash."""
+        if not self.available:
+            return False
+        try:
+            cur = self._conn.execute(
+                "SELECT 1 FROM trusted_hash WHERE sha256 = ?",
+                (bytes.fromhex(sha256_hex),))
+            return cur.fetchone() is not None
+        except (sqlite3.Error, ValueError):
+            # Any lookup failure is a miss, never a match: false negatives cost
+            # a sandbox run, a false positive would be a bypass.
+            return False
+
+    def version(self):
+        return self.release
+
+
+def sha256_of(path):
+    """SHA-256 of a file, streamed so a large binary costs no extra memory."""
+    hasher = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+    except OSError:
+        return None
+    return hasher.hexdigest()
+
+
+# ---------------------------------------------------------------------------
 # Trust policy
 # ---------------------------------------------------------------------------
 # Publisher trust levels, weakest first, for the --trust-min-level comparison.
 TRUST_LEVELS = ["provisional", "standard", "high"]
+
+
+def known_file_reason(result, sha256, hash_db, metrics):
+    """
+    The NSRL + Authenticode fast path. Returns (reason_code, detail) when the
+    file qualifies as TRUSTED_KNOWN_FILE, else (failure_code, detail).
+
+    BOTH must hold, and the order is the spec's: hash first (cheap, and the
+    thing a stolen certificate cannot forge), signature second (only paid for
+    on a hash hit). A valid signature alone never qualifies a file - that is the
+    stolen-certificate defence, and it is not a tunable.
+    """
+    # 1. Known-good hash. No hit -> normal analysis, and no signature work.
+    if not hash_db.contains(sha256):
+        metrics["nsrl_hash_misses"] += 1
+        return ("NSRL_HASH_NOT_FOUND", "sha256 is not in the trusted set")
+    metrics["nsrl_hash_hits"] += 1
+
+    # 2. The scanner must have verified the signature. The gate runs the scan
+    # with --verify-signature on a hash hit, so signer.verification is present.
+    signer = result.signer
+    if not signer:
+        return ("NO_EMBEDDED_SIGNATURE", "no signing identity on the file")
+    metrics["signature_verifications"] += 1
+
+    if signer.get("distrusted"):
+        metrics["signature_invalid"] += 1
+        return ("CERTIFICATE_REVOKED", signer["distrusted"])
+
+    if not signer.get("verified"):
+        metrics["signature_invalid"] += 1
+        reason = signer.get("verification") or "INVALID_AUTHENTICODE"
+        return (reason, "signature did not cryptographically verify")
+    metrics["signature_valid"] += 1
+
+    # 3. The verified publisher must be an approved one. A verified signature
+    # from a publisher we do not list is provenance we did not ask for.
+    if not signer.get("publisher"):
+        return ("PUBLISHER_MISMATCH", "verified, but not an approved publisher")
+
+    detail = "%s, chain to %s, NSRL %s" % (
+        signer.get("publisher"), signer.get("verified_root"), hash_db.version())
+    return ("TRUSTED_KNOWN_FILE", detail)
 
 
 def trust_bypass_reason(result, args, eligible_counter):
@@ -544,6 +665,14 @@ def report_throughput(results, batched=None):
         print("    This is the number to plan capacity against: one process, or a")
         print("    linked library, amortises the launch away.")
 
+    known_files = [r for r in results if r.verdict == "trusted_known_file"]
+    if known_files:
+        print()
+        print(f"  Trusted known files           {len(known_files)}")
+        print("    Provenance TRUSTED_KNOWN_FILE, not CLEAN: NSRL hash AND verified")
+        print("    Authenticode to an approved publisher. Recorded with sha256 in")
+        print("    the CSV, so a definitions change can force re-evaluation.")
+
     bypassed = [r for r in results if r.verdict == "trusted_bypass"]
     if bypassed:
         print()
@@ -627,6 +756,7 @@ def write_csv(path, results, labels):
             "file_type", "wall_ms", "engine_ms", "reason",
             "signer_publisher", "signer_trust", "signer_verified",
             "signer_spki_sha256", "signer_cert_sha256", "signer_distrusted",
+            "sha256", "signer_verification", "signer_verified_root",
         ])
         for result in results:
             label = label_for(labels, result.path) if labels else None
@@ -647,8 +777,110 @@ def write_csv(path, results, labels):
                 signer.get("spki_sha256", ""),
                 signer.get("cert_sha256", ""),
                 signer.get("distrusted", ""),
+                result.sha256 or "",
+                signer.get("verification", ""),
+                signer.get("verified_root", ""),
             ])
     print(f"\n  per-file rows written to {path}")
+
+
+# ---------------------------------------------------------------------------
+# Trust cache and metrics
+# ---------------------------------------------------------------------------
+class TrustCache:
+    """
+    A SQLite cache of known-file determinations, keyed by (sha256, version).
+
+    The SHA-256 identifies exact file contents, so a determination is stable for
+    the lifetime of a trust-database version - which is why the version is part
+    of the key: an NSRL update, a publisher-policy change or a revocation change
+    ships a new version, and every prior entry is simply not looked up again.
+    A missing or unwritable cache is not an error; it just means verification
+    runs every time.
+    """
+
+    def __init__(self, path, version):
+        self.version = version or "none"
+        self._conn = None
+        if not path:
+            return
+        try:
+            self._conn = sqlite3.connect(path)
+            self._conn.execute(
+                "CREATE TABLE IF NOT EXISTS trust_cache ("
+                "sha256 TEXT NOT NULL, version TEXT NOT NULL, "
+                "reason TEXT NOT NULL, detail TEXT, "
+                "PRIMARY KEY (sha256, version))")
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            print(f"  trust cache unavailable ({exc}); verifying every file")
+            self._conn = None
+
+    def get(self, sha256):
+        if not self._conn:
+            return None
+        try:
+            row = self._conn.execute(
+                "SELECT reason, detail FROM trust_cache WHERE sha256=? AND version=?",
+                (sha256, self.version)).fetchone()
+        except sqlite3.Error:
+            return None
+        return (row[0], row[1]) if row else None
+
+    def put(self, sha256, known):
+        if not self._conn:
+            return
+        try:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO trust_cache (sha256, version, reason, detail) "
+                "VALUES (?, ?, ?, ?)",
+                (sha256, self.version, known[0], known[1]))
+            self._conn.commit()
+        except sqlite3.Error:
+            pass
+
+
+def new_metrics():
+    """The counters the spec asks for, plus timing lists for the averages."""
+    return {
+        "files_seen": 0,
+        "pe_files_seen": 0,
+        "nsrl_hash_hits": 0,
+        "nsrl_hash_misses": 0,
+        "signature_verifications": 0,
+        "signature_valid": 0,
+        "signature_invalid": 0,
+        "trusted_fast_path": 0,
+        "normal_analysis": 0,
+        "trust_cache_hits": 0,
+        "trust_cache_misses": 0,
+        "hash_lookup_ms": [],
+        "signature_verify_ms": [],
+    }
+
+
+def report_metrics(metrics):
+    print()
+    print("=" * 72)
+    print("TRUST FAST-PATH METRICS")
+    print("=" * 72)
+    for key in ("files_seen", "pe_files_seen", "nsrl_hash_hits", "nsrl_hash_misses",
+                "signature_verifications", "signature_valid", "signature_invalid",
+                "trusted_fast_path", "normal_analysis",
+                "trust_cache_hits", "trust_cache_misses"):
+        print(f"  {key:<26} {metrics[key]}")
+    hashes = metrics["hash_lookup_ms"]
+    sigs = metrics["signature_verify_ms"]
+    if hashes:
+        print(f"  average_hash_lookup_ms     {statistics.mean(hashes):.3f}")
+    if sigs:
+        print(f"  average_signature_ms       {statistics.mean(sigs):.1f}")
+    if metrics["trusted_fast_path"]:
+        saved = metrics["trusted_fast_path"] * SANDBOX_SECONDS_PER_FILE
+        print()
+        print(f"  Sandbox runs eliminated by the known-file path: "
+              f"{metrics['trusted_fast_path']} "
+              f"({saved / 60.0:.1f} min at {SANDBOX_SECONDS_PER_FILE}s each)")
 
 
 # ---------------------------------------------------------------------------
@@ -678,6 +910,16 @@ def main():
                         help="largest single stream the scanner reads, in MB "
                              "(default: 10; a longer stream is reported "
                              "indeterminate, not clean)")
+    parser.add_argument("--trusted-hashes",
+                        help="path to an NSRL-derived trusted-hash database "
+                             "(built by tools/trust/nsrl-import.py). A PE whose "
+                             "SHA-256 is in it AND whose signature verifies to an "
+                             "approved publisher takes the TRUSTED_KNOWN_FILE fast "
+                             "path. Neither fact alone qualifies a file.")
+    parser.add_argument("--trust-cache",
+                        help="path to a SQLite cache of trust determinations, keyed "
+                             "by (sha256, trust-db version). Reused across runs; "
+                             "invalidated automatically when the version changes.")
     parser.add_argument("--trust-bypass", action="store_true",
                         help="allow a VERIFIED signature from a trusted publisher to "
                              "skip the sandbox for files whose only finding is being "
@@ -708,6 +950,9 @@ def main():
 
     cdscan = find_cdscan(args.cdscan)
     labels = load_labels(args.expect_manifest) if args.expect_manifest else {}
+    hash_db = TrustedHashDb(args.trusted_hashes)
+    cache = TrustCache(args.trust_cache, hash_db.version())
+    metrics = new_metrics()
 
     targets = expand(paths, args.recurse)
     if args.limit:
@@ -731,21 +976,79 @@ def main():
     results = []
     eligible_counter = [0]
     for index, path in enumerate(targets, 1):
-        result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
-                          archive_password=args.archive_password,
-                          max_stream_mb=args.max_stream_mb)
+        metrics["files_seen"] += 1
 
-        # Trust is consulted only after the scan, and only to reconsider a
-        # submit. TRUSTED_BYPASS is provenance, never CLEAN: the CSV records
-        # which it was, so the two can never be conflated downstream.
-        if result.submit:
+        # The known-file fast path, when a trusted-hash database is loaded. Hash
+        # first: the SHA-256 gates whether any signature work happens at all,
+        # exactly as the spec's flow requires, and it is the fact a stolen
+        # certificate cannot forge.
+        sha256 = None
+        known = None
+        if hash_db.available:
+            hash_start = time.perf_counter()
+            sha256 = sha256_of(path)
+            metrics["hash_lookup_ms"].append((time.perf_counter() - hash_start) * 1000.0)
+
+        if sha256 and hash_db.contains(sha256):
+            # A hash hit: consult the cache before the expensive verification.
+            cached = cache.get(sha256)
+            if cached is not None:
+                metrics["trust_cache_hits"] += 1
+                result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
+                                  archive_password=args.archive_password,
+                                  max_stream_mb=args.max_stream_mb)
+                result.sha256 = sha256
+                known = cached
+            else:
+                metrics["trust_cache_misses"] += 1
+                verify_start = time.perf_counter()
+                result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
+                                  archive_password=args.archive_password,
+                                  max_stream_mb=args.max_stream_mb,
+                                  verify_signature=True)
+                metrics["signature_verify_ms"].append(
+                    (time.perf_counter() - verify_start) * 1000.0)
+                result.sha256 = sha256
+                reason, detail = known_file_reason(result, sha256, hash_db, metrics)
+                known = (reason, detail)
+                cache.put(sha256, known)
+        else:
+            if sha256:
+                metrics["nsrl_hash_misses"] += 1
+            result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
+                              archive_password=args.archive_password,
+                              max_stream_mb=args.max_stream_mb)
+            result.sha256 = sha256
+
+        if result.signer:
+            metrics["pe_files_seen"] += 1
+
+        # Apply the known-file decision. TRUSTED_KNOWN_FILE is its own provenance
+        # - never CLEAN - and only it takes the fast path; every other code is an
+        # explanation attached to a file that still goes to normal analysis.
+        if known and known[0] == "TRUSTED_KNOWN_FILE" and result.submit:
+            metrics["trusted_fast_path"] += 1
+            result.verdict = "trusted_known_file"
+            result.capabilities = ["TRUSTED_KNOWN_FILE: " + known[1]]
+        elif known:
+            result.notes = list(result.notes) + [
+                f"fast path not taken: {known[0]} ({known[1]})"]
+
+        # The reputation bypass (the earlier, separate signature-only path) is
+        # kept, still off by default, and still cannot fire on a Stage-1 claim.
+        if result.submit and args.trust_bypass:
             bypass = trust_bypass_reason(result, args, eligible_counter)
             if bypass:
                 result.verdict = "trusted_bypass"
                 result.capabilities = [bypass]
+
+        if result.submit:
+            metrics["normal_analysis"] += 1
+
         results.append(result)
 
-        decision = "SUBMIT  " if result.submit else "withhold"
+        decision = ("KNOWN   " if result.verdict == "trusted_known_file"
+                    else "SUBMIT  " if result.submit else "withhold")
         print(f"  [{index:>4}/{len(targets)}] {decision} "
               f"{os.path.basename(path)[:44]:<46} "
               f"{result.wall_ms:6.1f} ms  {result.reason[:40]}")
@@ -761,6 +1064,8 @@ def main():
                               archive_password=args.archive_password,
                               max_stream_mb=args.max_stream_mb)
     submitted, _ = report_throughput(results, batched)
+    if hash_db.available:
+        report_metrics(metrics)
     false_negatives = report_accuracy(results, labels) if labels else []
 
     if args.csv:
