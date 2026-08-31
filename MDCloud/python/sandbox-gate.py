@@ -110,7 +110,7 @@ Notes
 References
 ----------
 * https://www.opswat.com/docs/mdcloud/metadefender-cloud-api-v4
-* content-detect: ../../POC-IDEAS/content-detect
+* content-detect: ../../filefilter/content-detect (https://github.com/OPSWAT/filefilter)
 
 Author:    Chris Seiler
 Copyright: (c) 2026 OPSWAT, Inc. All rights reserved.
@@ -201,15 +201,16 @@ def find_cdscan(explicit):
     if found:
         return found
 
-    # The usual layout on a developer machine: this repo and content-detect
-    # checked out side by side.
+    # The usual layout on a developer machine: this repo and the file-filter repo
+    # checked out side by side. The repo is github.com/OPSWAT/filefilter; a
+    # pre-rename checkout may still be named POC-IDEAS, so both are tried.
     here = os.path.dirname(os.path.abspath(__file__))
     repos = os.path.abspath(os.path.join(here, "..", "..", ".."))
     candidates = [
-        os.path.join(repos, "POC-IDEAS", "content-detect", "target", "release", "cdscan.exe"),
-        os.path.join(repos, "POC-IDEAS", "content-detect", "target", "release", "cdscan"),
-        os.path.join(repos, "POC-IDEAS", "content-detect", "target", "debug", "cdscan.exe"),
-        os.path.join(repos, "POC-IDEAS", "content-detect", "target", "debug", "cdscan"),
+        os.path.join(repos, repo_dir, "content-detect", "target", profile, binary)
+        for repo_dir in ("filefilter", "POC-IDEAS")
+        for profile in ("release", "debug")
+        for binary in ("cdscan.exe", "cdscan")
     ]
     for candidate in candidates:
         if os.path.isfile(candidate):
