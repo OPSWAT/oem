@@ -277,6 +277,20 @@ class GateResult:
         self.gate_decision = "withhold"
         self.gate_reason = status
 
+    def force_submit_by_denylist(self, detail):
+        """Force a file with a known-bad hash to analysis.
+
+        A denylist hit overrides every withhold: even a scanner `clean` verdict
+        (a stolen-key file that looks benign, say) must go to the sandbox if its
+        hash is known-bad. Like trust, this changes only the gate decision — the
+        scanner verdict is left untouched — but in the opposite direction, and it
+        wins over trust: known-bad can never be a trusted known file.
+        """
+        self.trust_status = None
+        self.trust_detail = detail
+        self.gate_decision = "submit"
+        self.gate_reason = "KNOWN_BAD_HASH"
+
     @property
     def submit(self):
         """True when this file must go to the sandbox."""
@@ -427,6 +441,10 @@ class TrustedHashDb:
     def __init__(self, path):
         self.path = path
         self.available = False
+        # Whether the optional denylist table is present. Its absence is normal
+        # (an older database), not an error: the known-bad check simply returns
+        # nothing, and the file still goes to normal analysis.
+        self.has_denylist = False
         self.release = "none"
         self._conn = None
         if not path:
@@ -438,10 +456,31 @@ class TrustedHashDb:
             # A trivial probe confirms the table is really there.
             self._conn.execute("SELECT sha256 FROM trusted_hash LIMIT 1")
             self.available = True
+            try:
+                self._conn.execute("SELECT sha256 FROM known_bad_hash LIMIT 1")
+                self.has_denylist = True
+            except sqlite3.Error:
+                self.has_denylist = False
         except (sqlite3.Error, OSError) as exc:
             # Fail closed: no known-good layer, so nothing skips on hash.
             print(f"  trusted-hash db unavailable ({exc}); fast path disabled")
             self._conn = None
+
+    def status_of(self, sha256_hex):
+        """Classify a SHA-256 as 'known_bad', 'known_good', or 'unknown'.
+
+        Three distinct states, and the order matters: a hash that is somehow on
+        both lists is treated as BAD. Known-good is the only state that can lead
+        to a skip, and only in combination with a verified signature; known-bad
+        forces analysis; unknown is ordinary. A lookup failure is 'unknown',
+        never 'known_good' — a false miss costs a sandbox run, a false good would
+        be a bypass.
+        """
+        if self.contains_bad(sha256_hex):
+            return "known_bad"
+        if self.contains(sha256_hex):
+            return "known_good"
+        return "unknown"
 
     def contains(self, sha256_hex):
         """True when this SHA-256 is a catalogued known-good PE hash."""
@@ -455,6 +494,23 @@ class TrustedHashDb:
         except (sqlite3.Error, ValueError):
             # Any lookup failure is a miss, never a match: false negatives cost
             # a sandbox run, a false positive would be a bypass.
+            return False
+
+    def contains_bad(self, sha256_hex):
+        """True when this SHA-256 is on the known-bad denylist.
+
+        Fail-closed in the safe direction: an unavailable database or a lookup
+        error returns False, so the denylist can only ever *add* a deny signal,
+        never suppress the ordinary scan-and-submit path.
+        """
+        if not self.available or not self.has_denylist:
+            return False
+        try:
+            cur = self._conn.execute(
+                "SELECT 1 FROM known_bad_hash WHERE sha256 = ?",
+                (bytes.fromhex(sha256_hex),))
+            return cur.fetchone() is not None
+        except (sqlite3.Error, ValueError):
             return False
 
     def version(self):
@@ -490,6 +546,13 @@ def known_file_reason(result, sha256, hash_db, metrics):
     on a hash hit). A valid signature alone never qualifies a file - that is the
     stolen-certificate defence, and it is not a tunable.
     """
+    # 0. Known-bad hash wins over everything. A denylisted hash can never be a
+    # trusted known file, no matter what signature it carries, and it is forced
+    # to analysis even if the scanner would call it clean.
+    if hash_db.contains_bad(sha256):
+        metrics["nsrl_known_bad"] += 1
+        return ("KNOWN_BAD_HASH", "sha256 is on the known-bad denylist")
+
     # 1. Known-good hash. No hit -> normal analysis, and no signature work.
     if not hash_db.contains(sha256):
         metrics["nsrl_hash_misses"] += 1
@@ -952,6 +1015,7 @@ def new_metrics():
         "pe_files_seen": 0,
         "nsrl_hash_hits": 0,
         "nsrl_hash_misses": 0,
+        "nsrl_known_bad": 0,
         "signature_verifications": 0,
         "signature_valid": 0,
         "signature_invalid": 0,
@@ -970,6 +1034,7 @@ def report_metrics(metrics):
     print("TRUST FAST-PATH METRICS")
     print("=" * 72)
     for key in ("files_seen", "pe_files_seen", "nsrl_hash_hits", "nsrl_hash_misses",
+                "nsrl_known_bad",
                 "signature_verifications", "signature_valid", "signature_invalid",
                 "trusted_fast_path", "normal_analysis",
                 "trust_cache_hits", "trust_cache_misses"):
@@ -1128,24 +1193,33 @@ def main():
         if result.signer:
             metrics["pe_files_seen"] += 1
 
-        # Apply the known-file decision. TRUSTED_KNOWN_FILE is a gate-level
-        # provenance label, never a scanner verdict and never CLEAN; only it
-        # takes the fast path, and it only turns a submit into a skip. The
-        # scanner verdict underneath is left exactly as reported.
-        if known and known[0] == "TRUSTED_KNOWN_FILE" and result.submit:
-            metrics["trusted_fast_path"] += 1
-            result.withhold_by_trust("trusted_known_file",
-                                     "TRUSTED_KNOWN_FILE: " + known[1])
-        elif known:
-            result.notes = list(result.notes) + [
-                f"fast path not taken: {known[0]} ({known[1]})"]
+        # A known-bad hash is decided before any trust path is even considered:
+        # it forces analysis and overrides every withhold, including a scanner
+        # `clean`. Known-bad wins over known-good and over the reputation bypass,
+        # so those paths are skipped entirely for a denylisted file.
+        if sha256 and hash_db.contains_bad(sha256):
+            metrics["nsrl_known_bad"] += 1
+            result.force_submit_by_denylist("KNOWN_BAD_HASH: sha256 on denylist")
+        else:
+            # Apply the known-file decision. TRUSTED_KNOWN_FILE is a gate-level
+            # provenance label, never a scanner verdict and never CLEAN; only it
+            # takes the fast path, and it only turns a submit into a skip. The
+            # scanner verdict underneath is left exactly as reported.
+            if known and known[0] == "TRUSTED_KNOWN_FILE" and result.submit:
+                metrics["trusted_fast_path"] += 1
+                result.withhold_by_trust("trusted_known_file",
+                                         "TRUSTED_KNOWN_FILE: " + known[1])
+            elif known:
+                result.notes = list(result.notes) + [
+                    f"fast path not taken: {known[0]} ({known[1]})"]
 
-        # The reputation bypass (the earlier, separate signature-only path) is
-        # kept, still off by default, and still cannot fire on a Stage-1 claim.
-        if result.submit and args.trust_bypass:
-            bypass = trust_bypass_reason(result, args, eligible_counter)
-            if bypass:
-                result.withhold_by_trust("trusted_bypass", bypass)
+            # The reputation bypass (the earlier, separate signature-only path)
+            # is kept, still off by default, and still cannot fire on a Stage-1
+            # claim.
+            if result.submit and args.trust_bypass:
+                bypass = trust_bypass_reason(result, args, eligible_counter)
+                if bypass:
+                    result.withhold_by_trust("trusted_bypass", bypass)
 
         if result.submit:
             metrics["normal_analysis"] += 1

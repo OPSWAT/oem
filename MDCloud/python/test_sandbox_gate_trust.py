@@ -25,8 +25,13 @@ gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
 
-def trusted_db(tmp, hashes, release="2026.test"):
-    """A trusted-hash DB containing the given hex SHA-256 strings."""
+def trusted_db(tmp, hashes, release="2026.test", bad=None, with_denylist=None):
+    """A trusted-hash DB containing the given hex SHA-256 strings.
+
+    `bad` seeds the optional known-bad denylist. `with_denylist` overrides
+    whether the denylist TABLE exists at all (defaults to: it exists iff `bad`
+    is provided), so a test can build an old-style DB with no denylist table.
+    """
     path = os.path.join(tmp, "trusted.dat")
     c = sqlite3.connect(path)
     c.executescript(
@@ -36,6 +41,14 @@ def trusted_db(tmp, hashes, release="2026.test"):
     for h in hashes:
         c.execute("INSERT INTO trusted_hash VALUES (?,?,?,?,?,?)",
                   (bytes.fromhex(h), "f.exe", "P", "V", release, "nsrl"))
+    make_denylist = with_denylist if with_denylist is not None else (bad is not None)
+    if make_denylist:
+        c.executescript(
+            "CREATE TABLE known_bad_hash (sha256 BLOB PRIMARY KEY, source TEXT, "
+            "reference TEXT) WITHOUT ROWID;")
+        for h in (bad or []):
+            c.execute("INSERT INTO known_bad_hash VALUES (?,?,?)",
+                      (bytes.fromhex(h), "test", "ref"))
     c.execute("INSERT INTO meta VALUES ('nsrl_release', ?)", (release,))
     c.commit()
     c.close()
@@ -142,10 +155,61 @@ def run_fail_closed():
     print("  ok  unavailable db and authoritative miss both fail closed")
 
 
+def run_denylist():
+    print("known-bad denylist (three-state classification)")
+    tmp = tempfile.mkdtemp()
+    good = "aa" * 32
+    bad = "bb" * 32
+    both = "cc" * 32
+    db = gate.TrustedHashDb(trusted_db(tmp, [good, both], bad=[bad, both]))
+
+    # Three distinct states.
+    assert db.status_of(good) == "known_good"
+    assert db.status_of(bad) == "known_bad"
+    assert db.status_of("dd" * 32) == "unknown"
+    # A hash on both lists is treated as bad.
+    assert db.status_of(both) == "known_bad", "known-bad must win over known-good"
+
+    # known_file_reason returns KNOWN_BAD_HASH and never TRUSTED_KNOWN_FILE.
+    result = FakeResult()
+    result.signer = verified_signer()
+    reason, _ = gate.known_file_reason(result, bad, db, new_metrics())
+    assert reason == "KNOWN_BAD_HASH", f"expected KNOWN_BAD_HASH, got {reason}"
+
+    # force_submit_by_denylist overrides a scanner CLEAN verdict.
+    clean = gate.GateResult("f", "clean", [], [], 1.0, 1.0)
+    assert not clean.submit, "a clean scan withholds by default"
+    clean.force_submit_by_denylist("KNOWN_BAD_HASH")
+    assert clean.submit, "a known-bad hash forces submission even over clean"
+    assert clean.scanner_verdict == "clean", "the scanner verdict is not rewritten"
+    assert clean.trust_status is None, "known-bad is not a trust status"
+
+    print("  ok  good/bad/unknown classified, bad wins, clean overridden")
+
+
+def run_denylist_fail_closed():
+    print("denylist absent or unavailable fails closed")
+    tmp = tempfile.mkdtemp()
+    # An old-style DB with no denylist table: contains_bad is always False, and
+    # the ordinary scan-and-submit path is unaffected.
+    db = gate.TrustedHashDb(trusted_db(tmp, ["aa" * 32], with_denylist=False))
+    assert db.available and not db.has_denylist
+    assert not db.contains_bad("bb" * 32), "no denylist table -> nothing is bad"
+    assert db.status_of("aa" * 32) == "known_good"
+
+    # A missing database: nothing is known-good and nothing is known-bad.
+    missing = gate.TrustedHashDb("/nonexistent/trusted.dat")
+    assert not missing.contains_bad("bb" * 32)
+    assert missing.status_of("bb" * 32) == "unknown"
+    print("  ok  missing table and missing db both fail closed")
+
+
 def main():
     run_matrix()
     run_cache()
     run_fail_closed()
+    run_denylist()
+    run_denylist_fail_closed()
     print("\nall trust gate tests passed")
 
 
@@ -206,6 +270,14 @@ def test_incompleteness():
 
 def test_hash_swap():
     run_hash_swap()
+
+
+def test_denylist():
+    run_denylist()
+
+
+def test_denylist_fail_closed():
+    run_denylist_fail_closed()
 
 
 if __name__ == "__main__":
