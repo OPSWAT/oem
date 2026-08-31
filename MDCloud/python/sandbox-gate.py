@@ -63,6 +63,15 @@ Flags
                     negative.
 --csv               Write one row per file.
 --limit             Stop after N files, for a quick look at a large corpus.
+--archive-password  Password to open encrypted archive members, so their content
+                    is scanned rather than only reported as locked. Nothing is
+                    written to disk. With a password supplied, `encrypted_container`
+                    stops counting as a reason to submit - the members behind it
+                    were read - while a decryption *failure* still marks the scan
+                    incomplete and submits.
+--max-stream-mb     Largest single stream the scanner reads (default 10). A longer
+                    stream is read up to the ceiling and reported indeterminate
+                    rather than clean, because the tail was never examined.
 --min-severity      Ignore findings below this severity: info (the default,
                     ignoring nothing), low, medium, high. This is the knob that
                     trades sandbox runs against coverage - raising it withholds
@@ -133,7 +142,7 @@ def find_cdscan(explicit):
             return explicit
         sys.exit(f"--cdscan {explicit} is not a file")
 
-    found = shutil.which("cdscan") or shutil.which("cdscan-cs")
+    found = shutil.which("cdscan")
     if found:
         return found
 
@@ -146,10 +155,6 @@ def find_cdscan(explicit):
         os.path.join(repos, "POC-IDEAS", "content-detect", "target", "release", "cdscan"),
         os.path.join(repos, "POC-IDEAS", "content-detect", "target", "debug", "cdscan.exe"),
         os.path.join(repos, "POC-IDEAS", "content-detect", "target", "debug", "cdscan"),
-        os.path.join(repos, "POC-IDEAS", "content-detect-cs", "src", "ContentDetect.Cli",
-                     "bin", "Release", "net9.0", "cdscan-cs.exe"),
-        os.path.join(repos, "POC-IDEAS", "content-detect-cs", "src", "ContentDetect.Cli",
-                     "bin", "Debug", "net9.0", "cdscan-cs.exe"),
     ]
     for candidate in candidates:
         if os.path.isfile(candidate):
@@ -198,7 +203,8 @@ class GateResult:
         return ", ".join(self.capabilities)
 
 
-def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"):
+def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info",
+             archive_password=None, max_stream_mb=None):
     """
     Gate one file and time it.
 
@@ -210,6 +216,10 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
     reporting only one of them would misrepresent the cost either way.
     """
     command = [cdscan, "--json", "--mode", mode]
+    if archive_password:
+        command += ["--archive-password", archive_password]
+    if max_stream_mb:
+        command += ["--max-stream-mb", str(max_stream_mb)]
     if stdin_bytes is None:
         command.append(path)
     else:
@@ -249,6 +259,17 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
     for finding in report.get("findings", []):
         capability = finding.get("capability")
         if not capability:
+            continue
+
+        # With a password in hand, "this archive was encrypted" stops being a
+        # coverage gap and becomes a fact about the container. It is not a reason
+        # to detonate: the members behind it were decrypted and scanned, and
+        # whatever they carry is reported on its own account. When decryption
+        # fails the scanner marks the scan incomplete instead, which arrives as
+        # `indeterminate` and submits — so nothing rests on this being right.
+        if archive_password and capability == "encrypted_container":
+            if capability not in ignored:
+                ignored.append(capability)
             continue
         severity = finding.get("severity", "high")
         rank = (SEVERITY_ORDER.index(severity) if severity in SEVERITY_ORDER
@@ -375,7 +396,7 @@ def percentile(values, fraction):
     return ordered[index]
 
 
-def measure_batched(cdscan, paths, mode):
+def measure_batched(cdscan, paths, mode, archive_password=None, max_stream_mb=None):
     """
     The same files through one process, to separate the gate's cost from the
     integration's.
@@ -395,7 +416,12 @@ def measure_batched(cdscan, paths, mode):
     engine = 0.0
     files = 0
     for start in range(0, len(paths), chunk_size):
-        command = [cdscan, "--json", "--mode", mode] + list(paths[start:start + chunk_size])
+        command = [cdscan, "--json", "--mode", mode]
+        if archive_password:
+            command += ["--archive-password", archive_password]
+        if max_stream_mb:
+            command += ["--max-stream-mb", str(max_stream_mb)]
+        command += list(paths[start:start + chunk_size])
         began = time.perf_counter()
         try:
             completed = subprocess.run(command, capture_output=True, timeout=900)
@@ -565,6 +591,13 @@ def main():
     parser.add_argument("--expect-manifest", help="ground-truth labels, mb-sweep shape")
     parser.add_argument("--csv", help="write one row per file")
     parser.add_argument("--limit", type=int, help="stop after N files")
+    parser.add_argument("--archive-password",
+                        help="password to open encrypted archive members, so their "
+                             "content can be scanned instead of only reported as locked")
+    parser.add_argument("--max-stream-mb", type=int, default=10,
+                        help="largest single stream the scanner reads, in MB "
+                             "(default: 10; a longer stream is reported "
+                             "indeterminate, not clean)")
     parser.add_argument("--min-severity", choices=SEVERITY_ORDER, default="info",
                         help="ignore findings below this severity (default: info, "
                              "which ignores nothing)")
@@ -591,6 +624,9 @@ def main():
 
     print(f"gate     : {cdscan}")
     print(f"mode     : {args.mode}")
+    print(f"stream   : {args.max_stream_mb} MB ceiling")
+    if args.archive_password:
+        print("password : supplied, encrypted members will be opened and scanned")
     print(f"floor    : {args.min_severity}"
           + ("" if args.min_severity == "info" else "  (findings below this are ignored)"))
     print(f"files    : {len(targets)}")
@@ -601,7 +637,9 @@ def main():
 
     results = []
     for index, path in enumerate(targets, 1):
-        result = run_gate(cdscan, path, args.mode, floor=args.min_severity)
+        result = run_gate(cdscan, path, args.mode, floor=args.min_severity,
+                          archive_password=args.archive_password,
+                          max_stream_mb=args.max_stream_mb)
         results.append(result)
 
         decision = "SUBMIT  " if result.submit else "withhold"
@@ -616,7 +654,9 @@ def main():
             else:
                 print(f"           submitted, data_id {data_id}")
 
-    batched = measure_batched(cdscan, targets, args.mode)
+    batched = measure_batched(cdscan, targets, args.mode,
+                              archive_password=args.archive_password,
+                              max_stream_mb=args.max_stream_mb)
     submitted, _ = report_throughput(results, batched)
     false_negatives = report_accuracy(results, labels) if labels else []
 
