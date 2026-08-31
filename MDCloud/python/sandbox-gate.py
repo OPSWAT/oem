@@ -175,7 +175,8 @@ class GateResult:
     """One file's gate decision, with the timings behind it."""
 
     def __init__(self, path, verdict, capabilities, notes, wall_ms, engine_ms,
-                 error=None, ignored=None, signer=None, sha256=None):
+                 error=None, ignored=None, signer=None, sha256=None,
+                 incomplete=False):
         self.path = path
         self.verdict = verdict
         self.capabilities = capabilities
@@ -194,6 +195,10 @@ class GateResult:
         # The exact file identity. Populated for PE files, so the known-good
         # cache and the audit CSV can key on it.
         self.sha256 = sha256
+        # True when the scanner could not examine all of the input. A verdict of
+        # "nothing actionable" over an incomplete scan is not trustworthy, so the
+        # gate never withholds on it.
+        self.incomplete = incomplete
 
     @property
     def submit(self):
@@ -294,11 +299,20 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
             target.append(capability)
 
     verdict = report.get("verdict", "indeterminate")
+    incomplete = bool(report.get("incomplete"))
 
     # Everything found was below the floor, so by this policy there is nothing to
-    # act on. `indeterminate` is never downgraded this way: the floor filters
-    # findings, and "could not look" is not a finding.
-    if verdict == "needs_further_processing" and not capabilities:
+    # act on -- BUT only when the scan actually saw the whole file. If content
+    # was skipped (a member that would not decrypt, a stream past the ceiling, a
+    # budget that ran out), an empty capability set means "nothing was found in
+    # the part we could read", which is not the same as "nothing is there". The
+    # scanner already marks that as `incomplete`; downgrading it to clean here
+    # would let an unreadable malicious archive be withheld. So the floor only
+    # downgrades a COMPLETE scan.
+    #
+    # `indeterminate` is likewise never downgraded: "could not look" is not a
+    # finding.
+    if verdict == "needs_further_processing" and not capabilities and not incomplete:
         verdict = "clean"
 
     return GateResult(
@@ -310,6 +324,7 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
         float(report.get("elapsed_ms", 0)),
         ignored=ignored,
         signer=report.get("signer"),
+        incomplete=incomplete,
     )
 
 
@@ -419,6 +434,16 @@ def known_file_reason(result, sha256, hash_db, metrics):
         metrics["signature_invalid"] += 1
         reason = signer.get("verification") or "INVALID_AUTHENTICODE"
         return (reason, "signature did not cryptographically verify")
+
+    # The two facts must describe the SAME bytes. The NSRL match keyed on the
+    # hash the gate computed; verification reports the hash of what it actually
+    # read. If a file is swapped on disk between those two reads, the hashes
+    # differ, and pairing a trusted hash with a signature over other bytes would
+    # be a fast path to a file we never checked. Require them equal.
+    verified_hash = signer.get("verified_sha256")
+    if verified_hash and sha256 and verified_hash.lower() != sha256.lower():
+        return ("HASH_MISMATCH",
+                "verified bytes differ from the hashed file; possible swap")
     metrics["signature_valid"] += 1
 
     # 3. The verified publisher must be an approved one. A verified signature

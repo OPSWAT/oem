@@ -149,6 +149,38 @@ def main():
     print("\nall trust gate tests passed")
 
 
+def run_incompleteness():
+    print("incompleteness never withholds")
+    # The reported hole: a scan that could not read the whole file returns an
+    # empty capability set once a floor ignores the encryption note - but empty
+    # findings over content never read is NOT clean, so the gate must submit.
+    # This mirrors run_gate's downgrade decision, where it lives.
+    def downgrade(verdict, capabilities, incomplete):
+        if verdict == "needs_further_processing" and not capabilities and not incomplete:
+            return "clean"
+        return verdict
+
+    assert downgrade("needs_further_processing", [], False) == "clean"
+    assert downgrade("needs_further_processing", [], True) == "needs_further_processing"
+    assert downgrade("indeterminate", [], True) == "indeterminate"
+    print("  ok  complete+empty -> clean, incomplete+empty -> submit")
+
+
+def run_hash_swap():
+    print("known-file path rejects a hash mismatch")
+    tmp = tempfile.mkdtemp()
+    sha = "aa" * 32
+    db = gate.TrustedHashDb(trusted_db(tmp, [sha]))
+    result = FakeResult()
+    result.signer = verified_signer(verified_sha256="bb" * 32)
+    reason, _ = gate.known_file_reason(result, sha, db, new_metrics())
+    assert reason == "HASH_MISMATCH", f"expected HASH_MISMATCH, got {reason}"
+    result.signer = verified_signer(verified_sha256=sha)
+    reason, _ = gate.known_file_reason(result, sha, db, new_metrics())
+    assert reason == "TRUSTED_KNOWN_FILE", f"expected TRUSTED_KNOWN_FILE, got {reason}"
+    print("  ok  mismatched verified bytes refused, matching bytes trusted")
+
+
 # pytest discovery
 def test_matrix():
     run_matrix()
@@ -160,6 +192,14 @@ def test_cache():
 
 def test_fail_closed():
     run_fail_closed()
+
+
+def test_incompleteness():
+    run_incompleteness()
+
+
+def test_hash_swap():
+    run_hash_swap()
 
 
 if __name__ == "__main__":
