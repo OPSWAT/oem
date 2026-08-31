@@ -20,16 +20,33 @@ encryption), never a risk score, and its quick mode runs the same checks as its
 full mode but stops at the first finding - so a clean quick result means the same
 thing as a clean full result. That property is what makes it usable as a gate.
 
-The decision, and which way it fails
-------------------------------------
-    needs_further_processing  ->  SUBMIT      something was found
-    indeterminate             ->  SUBMIT      the file could not be parsed
-    clean                     ->  WITHHOLD    nothing found, and the scan finished
+Scanner truth vs gate policy
+----------------------------
+Two separate things, kept separate on purpose. The scanner reports a *verdict*
+about the file; the gate makes a *decision* about the sandbox. The gate never
+rewrites the verdict — an audit can always read what the scanner said (the
+`scanner_verdict` column) apart from what the gate did (the `decision` and
+`gate_reason` columns).
+
+    scanner_verdict            gate decision   why
+    needs_further_processing   SUBMIT          something was found
+    indeterminate              SUBMIT          the scanner could not look
+    clean                      WITHHOLD        nothing found, scan provably complete
+
+Two gate *policies* can withhold a file without changing its verdict:
+  * a severity floor may withhold a `needs_further_processing` whose every
+    finding is below the floor — but ONLY over a complete scan, and the verdict
+    stays `needs_further_processing` (gate_reason BELOW_SEVERITY_FLOOR). It is
+    never relabelled `clean`.
+  * trust (a known file, or the reputation bypass) may turn a submit into a skip
+    (gate_reason trusted_known_file / trusted_bypass), again without touching the
+    verdict.
 
 `indeterminate` submitting is the whole safety property. It means "the scanner
 could not look", which is not the same as "there is nothing to see", and a gate
 that treated the two alike would let every unparseable file bypass the sandbox
-silently. There is no flag to turn that off.
+silently. There is no flag to turn that off, and no policy path turns a finding
+into `clean`.
 
 Workflow
 --------
@@ -123,11 +140,47 @@ BASE_URL = "https://api.metadefender.com/v4"
 # per file; the low end is used so the saving is never overstated.
 SANDBOX_SECONDS_PER_FILE = 60
 
-# Verdicts the gate can return. Anything not in this set is treated as a submit,
-# because an unrecognised verdict is a reason to be careful, not a reason to
-# withhold.
-SUBMIT_VERDICTS = {"needs_further_processing", "indeterminate"}
-WITHHOLD_VERDICTS = {"clean"}
+# The scanner's own verdicts. These are the scanner's TRUTH about a file and the
+# gate never rewrites them: only `clean` — nothing found over a provably
+# complete inspection — is a scanner reason to withhold. Everything else the
+# scanner reports either goes to the sandbox or is withheld by a *gate policy*
+# that is recorded separately, so an audit can always tell what the scanner said
+# apart from what the gate chose to do about it.
+CLEAN_VERDICT = "clean"
+INDETERMINATE_VERDICT = "indeterminate"
+NEEDS_PROCESSING_VERDICT = "needs_further_processing"
+
+
+def base_gate_decision(scanner_verdict, has_actionable, incomplete):
+    """The gate's decision from the scanner's verdict alone, before trust.
+
+    Returns ``(decision, reason)`` where decision is ``"submit"`` or
+    ``"withhold"``. This function is the *only* place a scanner verdict is turned
+    into a gate action, and it never mutates the verdict itself.
+
+    The one subtlety is the severity floor: a `needs_further_processing` whose
+    every finding sits below the consumer's floor has nothing actionable left,
+    so the gate *policy* withholds it — but the scanner verdict stays
+    `needs_further_processing`, because the scanner did find something. A floor
+    withhold is only ever taken over a COMPLETE scan; if the scan was incomplete,
+    "nothing actionable in the part we could read" is not "nothing there", so it
+    submits.
+    """
+    if scanner_verdict == CLEAN_VERDICT:
+        return "withhold", "SCANNER_CLEAN"
+    if scanner_verdict == INDETERMINATE_VERDICT:
+        # "Could not look" is a reason to submit, never to withhold.
+        return "submit", "SCANNER_INDETERMINATE"
+    if scanner_verdict == NEEDS_PROCESSING_VERDICT:
+        if incomplete:
+            return "submit", "INCOMPLETE_SCAN"
+        if has_actionable:
+            return "submit", "CAPABILITY_ABOVE_FLOOR"
+        # Findings existed but all sit below the floor, and the scan was
+        # complete: a pure gate-policy withhold.
+        return "withhold", "BELOW_SEVERITY_FLOOR"
+    # An unrecognised verdict is a reason to be careful, not to withhold.
+    return "submit", "UNKNOWN_VERDICT"
 
 # Severity order, lowest first. The gate can be told to ignore findings below a
 # floor, which trades sandbox runs for coverage.
@@ -174,11 +227,14 @@ def find_cdscan(explicit):
 class GateResult:
     """One file's gate decision, with the timings behind it."""
 
-    def __init__(self, path, verdict, capabilities, notes, wall_ms, engine_ms,
+    def __init__(self, path, scanner_verdict, capabilities, notes, wall_ms, engine_ms,
                  error=None, ignored=None, signer=None, sha256=None,
                  incomplete=False):
         self.path = path
-        self.verdict = verdict
+        # The scanner's TRUTH about the file. Never mutated after construction:
+        # neither the severity floor nor the trust layer may rewrite it. What the
+        # gate decides to *do* lives in `gate_decision`/`gate_reason` instead.
+        self.scanner_verdict = scanner_verdict
         self.capabilities = capabilities
         self.notes = notes
         self.wall_ms = wall_ms
@@ -200,20 +256,49 @@ class GateResult:
         # gate never withholds on it.
         self.incomplete = incomplete
 
+        # The gate decision, derived from the scanner verdict and the floor. This
+        # is policy, kept strictly separate from `scanner_verdict`.
+        self.gate_decision, self.gate_reason = base_gate_decision(
+            scanner_verdict, bool(capabilities), incomplete)
+        # A gate-level provenance label (trusted known file / reputation bypass),
+        # or None. It is NOT a scanner verdict and never becomes one.
+        self.trust_status = None
+        self.trust_detail = None
+
+    def withhold_by_trust(self, status, detail):
+        """Record a trust decision to skip the sandbox.
+
+        Trust can only turn a *submit* into a skip, never the reverse, and it
+        touches only the gate decision — `scanner_verdict` is left exactly as the
+        scanner reported it.
+        """
+        self.trust_status = status
+        self.trust_detail = detail
+        self.gate_decision = "withhold"
+        self.gate_reason = status
+
     @property
     def submit(self):
         """True when this file must go to the sandbox."""
-        return (self.verdict not in WITHHOLD_VERDICTS
-                and self.verdict not in ("trusted_bypass", "trusted_known_file"))
+        return self.gate_decision == "submit"
+
+    @property
+    def verdict(self):
+        """Back-compat read alias for the scanner's verdict.
+
+        Read-only on purpose: the whole point of the split is that nothing
+        rewrites the scanner verdict, so there is no setter.
+        """
+        return self.scanner_verdict
 
     @property
     def reason(self):
         if self.error:
             return f"gate failed: {self.error}"
-        if self.verdict == "indeterminate":
+        if self.trust_status:
+            return self.trust_detail or self.trust_status
+        if self.scanner_verdict == INDETERMINATE_VERDICT:
             return "could not be parsed conclusively"
-        if self.verdict == "trusted_known_file":
-            return self.capabilities[0] if self.capabilities else "TRUSTED_KNOWN_FILE"
         if not self.capabilities:
             if self.ignored:
                 return "only below the floor: " + ", ".join(self.ignored)
@@ -301,20 +386,12 @@ def run_gate(cdscan, path, mode, stdin_bytes=None, stdin_name=None, floor="info"
     verdict = report.get("verdict", "indeterminate")
     incomplete = bool(report.get("incomplete"))
 
-    # Everything found was below the floor, so by this policy there is nothing to
-    # act on -- BUT only when the scan actually saw the whole file. If content
-    # was skipped (a member that would not decrypt, a stream past the ceiling, a
-    # budget that ran out), an empty capability set means "nothing was found in
-    # the part we could read", which is not the same as "nothing is there". The
-    # scanner already marks that as `incomplete`; downgrading it to clean here
-    # would let an unreadable malicious archive be withheld. So the floor only
-    # downgrades a COMPLETE scan.
-    #
-    # `indeterminate` is likewise never downgraded: "could not look" is not a
-    # finding.
-    if verdict == "needs_further_processing" and not capabilities and not incomplete:
-        verdict = "clean"
-
+    # The scanner verdict is passed through UNCHANGED. If every finding sat below
+    # the floor, GateResult's decision logic withholds by *policy*
+    # (BELOW_SEVERITY_FLOOR) while leaving the verdict `needs_further_processing`
+    # — the scanner did find something, and only a complete scan's floor withhold
+    # is honoured, so an incomplete scan still submits. Nothing here can turn
+    # `needs_further_processing` into `clean`.
     return GateResult(
         path,
         verdict,
@@ -690,7 +767,7 @@ def report_throughput(results, batched=None):
         print("    This is the number to plan capacity against: one process, or a")
         print("    linked library, amortises the launch away.")
 
-    known_files = [r for r in results if r.verdict == "trusted_known_file"]
+    known_files = [r for r in results if r.trust_status == "trusted_known_file"]
     if known_files:
         print()
         print(f"  Trusted known files           {len(known_files)}")
@@ -698,7 +775,7 @@ def report_throughput(results, batched=None):
         print("    Authenticode to an approved publisher. Recorded with sha256 in")
         print("    the CSV, so a definitions change can force re-evaluation.")
 
-    bypassed = [r for r in results if r.verdict == "trusted_bypass"]
+    bypassed = [r for r in results if r.trust_status == "trusted_bypass"]
     if bypassed:
         print()
         print(f"  Trusted bypasses              {len(bypassed)}")
@@ -777,7 +854,8 @@ def write_csv(path, results, labels):
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow([
-            "file", "decision", "verdict", "capabilities", "expected",
+            "file", "decision", "scanner_verdict", "gate_reason", "trust_status",
+            "capabilities", "expected",
             "file_type", "wall_ms", "engine_ms", "reason",
             "signer_publisher", "signer_trust", "signer_verified",
             "signer_spki_sha256", "signer_cert_sha256", "signer_distrusted",
@@ -788,8 +866,10 @@ def write_csv(path, results, labels):
             signer = result.signer
             writer.writerow([
                 os.path.basename(result.path),
-                "submit" if result.submit else "withhold",
-                result.verdict,
+                result.gate_decision,
+                result.scanner_verdict,
+                result.gate_reason,
+                result.trust_status or "",
                 ";".join(result.capabilities),
                 (label or {}).get("expected", ""),
                 (label or {}).get("file_type", ""),
@@ -1048,13 +1128,14 @@ def main():
         if result.signer:
             metrics["pe_files_seen"] += 1
 
-        # Apply the known-file decision. TRUSTED_KNOWN_FILE is its own provenance
-        # - never CLEAN - and only it takes the fast path; every other code is an
-        # explanation attached to a file that still goes to normal analysis.
+        # Apply the known-file decision. TRUSTED_KNOWN_FILE is a gate-level
+        # provenance label, never a scanner verdict and never CLEAN; only it
+        # takes the fast path, and it only turns a submit into a skip. The
+        # scanner verdict underneath is left exactly as reported.
         if known and known[0] == "TRUSTED_KNOWN_FILE" and result.submit:
             metrics["trusted_fast_path"] += 1
-            result.verdict = "trusted_known_file"
-            result.capabilities = ["TRUSTED_KNOWN_FILE: " + known[1]]
+            result.withhold_by_trust("trusted_known_file",
+                                     "TRUSTED_KNOWN_FILE: " + known[1])
         elif known:
             result.notes = list(result.notes) + [
                 f"fast path not taken: {known[0]} ({known[1]})"]
@@ -1064,15 +1145,14 @@ def main():
         if result.submit and args.trust_bypass:
             bypass = trust_bypass_reason(result, args, eligible_counter)
             if bypass:
-                result.verdict = "trusted_bypass"
-                result.capabilities = [bypass]
+                result.withhold_by_trust("trusted_bypass", bypass)
 
         if result.submit:
             metrics["normal_analysis"] += 1
 
         results.append(result)
 
-        decision = ("KNOWN   " if result.verdict == "trusted_known_file"
+        decision = ("KNOWN   " if result.trust_status == "trusted_known_file"
                     else "SUBMIT  " if result.submit else "withhold")
         print(f"  [{index:>4}/{len(targets)}] {decision} "
               f"{os.path.basename(path)[:44]:<46} "

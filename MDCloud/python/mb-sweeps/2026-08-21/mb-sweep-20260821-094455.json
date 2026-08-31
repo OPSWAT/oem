@@ -1,0 +1,320 @@
+[
+ {
+  "sha256": "cd88d0e55a7269b235c9fe4c6bf70650ded91419ba496c6a1aa53180da3fc994",
+  "file_name": "dlr.arm7",
+  "file_type": "elf",
+  "file_size": 220,
+  "signature": "",
+  "first_seen": "2026-08-21 08:23:04",
+  "day": "2026-08-21",
+  "tags": [
+   "elf"
+  ],
+  "reporter": "abuse_ch",
+  "source": "taginfo:elf",
+  "mdc_verdict": "UNKNOWN",
+  "mdc_threat_level": 0,
+  "chain_depth": 1,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [],
+  "mdc_tags": [],
+  "ioc_count": 1,
+  "signal_groups": 0,
+  "error": null
+ },
+ {
+  "sha256": "b0807755b7d9de2f4412d21720b7735a175c7d3fd965fc0258056eb20e748697",
+  "file_name": "PO#367328911.rar",
+  "file_type": "rar",
+  "file_size": 29283,
+  "signature": "PureLogsStealer",
+  "first_seen": "2026-08-21 10:15:16",
+  "day": "2026-08-21",
+  "tags": [
+   "PureLogsStealer",
+   "rar"
+  ],
+  "reporter": "pr0xylife",
+  "source": "taginfo:rar",
+  "mdc_verdict": "MALICIOUS",
+  "mdc_threat_level": 1,
+  "chain_depth": 2,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [
+   "suspicious_obfuscation_using_String_replace",
+   "suspicious_obfuscation_using_substring"
+  ],
+  "mdc_tags": [
+   "encrypted",
+   "evasive",
+   "obfuscated",
+   "repaired"
+  ],
+  "ioc_count": 15,
+  "signal_groups": 11,
+  "error": null
+ },
+ {
+  "sha256": "6ff8480cde0b319de96e500d451ae2b892acf35d7635d560d4afacbee4960a58",
+  "file_name": "NGB260625003A TLX HBL.PDF.js",
+  "file_type": "js",
+  "file_size": 66780,
+  "signature": "AveMariaRAT",
+  "first_seen": "2026-08-21 08:39:17",
+  "day": "2026-08-21",
+  "tags": [
+   "AveMariaRAT",
+   "js"
+  ],
+  "reporter": "abuse_ch",
+  "source": "taginfo:js",
+  "mdc_verdict": null,
+  "mdc_threat_level": null,
+  "chain_depth": 0,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [],
+  "mdc_tags": [],
+  "ioc_count": null,
+  "signal_groups": null,
+  "error": "sandbox run timed out"
+ },
+ {
+  "sha256": "45a592bcf135e313584bb6cbc3c8335d2df35edc834e6819a9eae95cda82b527",
+  "file_name": "Adobe.js",
+  "file_type": "js",
+  "file_size": 2750,
+  "signature": "ConnectWise",
+  "first_seen": "2026-08-20 14:36:43",
+  "day": "2026-08-20",
+  "tags": [
+   "ConnectWise",
+   "js"
+  ],
+  "reporter": "abuse_ch",
+  "source": "taginfo:js",
+  "mdc_verdict": "MALICIOUS",
+  "mdc_threat_level": 1,
+  "chain_depth": 1,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [],
+  "mdc_tags": [
+   "evasive",
+   "obfuscated",
+   "repaired"
+  ],
+  "ioc_count": 4,
+  "signal_groups": 10,
+  "error": null
+ },
+ {
+  "sha256": "399ec5b106727e0e83eb280423a2ecb252acebcf2bee4bbb2a5658570c965e78",
+  "file_name": "QH88APP.exe",
+  "file_type": "exe",
+  "file_size": 27136,
+  "signature": "AsyncRAT",
+  "first_seen": "2026-08-20 15:44:11",
+  "day": "2026-08-20",
+  "tags": [
+   "AsyncRAT",
+   "exe",
+   "RAT"
+  ],
+  "reporter": "anonymous",
+  "source": "siginfo:AsyncRAT",
+  "mdc_verdict": "LIKELY_MALICIOUS",
+  "mdc_threat_level": 0.75,
+  "chain_depth": 1,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [
+   "INDICATOR_SUSPICIOUS_EXE_ASEP_REG_Reverse",
+   "NETexecutableMicrosoft",
+   "DebuggerCheck__RemoteAPI"
+  ],
+  "mdc_tags": [
+   "anti-vm",
+   "base64",
+   "fingerprint",
+   "lolbin",
+   "obfuscated",
+   "reconnaissance",
+   "reg",
+   "schtasks",
+   "vbnet"
+  ],
+  "ioc_count": 4,
+  "signal_groups": 21,
+  "error": null
+ },
+ {
+  "sha256": "066ecd627caec87426bd94db4f0c1ec45b8345e26b0cace2e8193a91155ce5ee",
+  "file_name": "packagecache_x64_data.zip",
+  "file_type": "zip",
+  "file_size": 8586695,
+  "signature": "OnyxC2",
+  "first_seen": "2026-08-20 18:44:56",
+  "day": "2026-08-20",
+  "tags": [
+   "akmuniverstall-top",
+   "getintoway-com",
+   "OnyxC2",
+   "zip"
+  ],
+  "reporter": "iamaachum",
+  "source": "taginfo:zip",
+  "mdc_verdict": "LIKELY_MALICIOUS",
+  "mdc_threat_level": 0.75,
+  "chain_depth": 2,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [
+   "EthereumAddress",
+   "ThreadControl__Context",
+   "SEH__vectored",
+   "DebuggerCheck__MemoryWorkingSet",
+   "MD5",
+   "SHA1",
+   "RC56"
+  ],
+  "mdc_tags": [
+   "anti-debug",
+   "crypto",
+   "microsoft_visual_cc",
+   "overlay",
+   "packed",
+   "reconnaissance"
+  ],
+  "ioc_count": 5,
+  "signal_groups": 29,
+  "error": null
+ },
+ {
+  "sha256": "7de8b252898d22bde75ef132e2c46d1c96d53ea534755e8cda17618e3006b4b0",
+  "file_name": "Purchase_Order_BOZ01-PO000180825.xlam",
+  "file_type": "xlsx",
+  "file_size": 946108,
+  "signature": "AgentTesla",
+  "first_seen": "2026-08-19 18:03:19",
+  "day": "2026-08-19",
+  "tags": [
+   "AgentTesla",
+   "CVE-2017-11882",
+   "xlam",
+   "xlsx"
+  ],
+  "reporter": "abuse_ch",
+  "source": "siginfo:AgentTesla",
+  "mdc_verdict": "MALICIOUS",
+  "mdc_threat_level": 1,
+  "chain_depth": 1,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [
+   "suspicious_obfuscation_using_String_replace"
+  ],
+  "mdc_tags": [
+   "base64",
+   "embedequation",
+   "exploit",
+   "obfuscated"
+  ],
+  "ioc_count": 201,
+  "signal_groups": 13,
+  "error": null
+ },
+ {
+  "sha256": "2dae1df14d0cc6ea8e670e0b327101d0fe5c475dc06a376e99a6df426bddf418",
+  "file_name": "HH262978-1 (C0601262621).xls",
+  "file_type": "xls",
+  "file_size": 1217024,
+  "signature": "RemcosRAT",
+  "first_seen": "2026-08-19 18:04:13",
+  "day": "2026-08-19",
+  "tags": [
+   "cve-2017-0199",
+   "RemcosRAT",
+   "xls"
+  ],
+  "reporter": "abuse_ch",
+  "source": "taginfo:xls",
+  "mdc_verdict": "UNKNOWN",
+  "mdc_threat_level": 0,
+  "chain_depth": 1,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [
+   "office_document_vba"
+  ],
+  "mdc_tags": [
+   "evasive",
+   "macros"
+  ],
+  "ioc_count": 14,
+  "signal_groups": 3,
+  "error": null
+ },
+ {
+  "sha256": "b8dd2c924604e8d4cac9a235cee2bf49a375727438f705a0028d0c89b7f9f1b7",
+  "file_name": "PIC0402023.jpg.lnk",
+  "file_type": "lnk",
+  "file_size": 2003,
+  "signature": "Phorpiex",
+  "first_seen": "2026-08-19 06:03:29",
+  "day": "2026-08-19",
+  "tags": [
+   "lnk",
+   "Phorpiex"
+  ],
+  "reporter": "lowmal3",
+  "source": "taginfo:lnk",
+  "mdc_verdict": null,
+  "mdc_threat_level": null,
+  "chain_depth": 0,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [],
+  "mdc_tags": [],
+  "ioc_count": null,
+  "signal_groups": null,
+  "error": "sandbox run timed out"
+ },
+ {
+  "sha256": "bd8766e6ddd2f0f9ce482b0c2d2bfff7868840244a12908eaa807678d9a033b5",
+  "file_name": "Payment_Slip-01.lzh.rar",
+  "file_type": "rar",
+  "file_size": 11535,
+  "signature": "XWorm",
+  "first_seen": "2026-08-18 19:07:09",
+  "day": "2026-08-18",
+  "tags": [
+   "rar",
+   "xworm"
+  ],
+  "reporter": "TomU",
+  "source": "taginfo:rar",
+  "mdc_verdict": null,
+  "mdc_threat_level": null,
+  "chain_depth": 0,
+  "multiscan_overall": null,
+  "multiscan_detected": null,
+  "multiscan_total": null,
+  "yara": [],
+  "mdc_tags": [],
+  "ioc_count": null,
+  "signal_groups": null,
+  "error": "sandbox run timed out"
+ }
+]

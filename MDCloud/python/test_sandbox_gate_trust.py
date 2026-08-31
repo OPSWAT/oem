@@ -151,19 +151,25 @@ def main():
 
 def run_incompleteness():
     print("incompleteness never withholds")
-    # The reported hole: a scan that could not read the whole file returns an
-    # empty capability set once a floor ignores the encryption note - but empty
-    # findings over content never read is NOT clean, so the gate must submit.
-    # This mirrors run_gate's downgrade decision, where it lives.
-    def downgrade(verdict, capabilities, incomplete):
-        if verdict == "needs_further_processing" and not capabilities and not incomplete:
-            return "clean"
-        return verdict
+    # A scan that could not read the whole file returns an empty actionable set
+    # once a floor ignores a finding - but empty findings over content never read
+    # is NOT clean. The gate decides via base_gate_decision, and the scanner
+    # verdict is never rewritten: an incomplete nfp submits, a complete below-
+    # floor nfp is withheld by POLICY (still not clean), and indeterminate always
+    # submits.
+    submit_complete, reason_complete = gate.base_gate_decision(
+        "needs_further_processing", has_actionable=False, incomplete=False)
+    assert submit_complete == "withhold" and reason_complete == "BELOW_SEVERITY_FLOOR"
 
-    assert downgrade("needs_further_processing", [], False) == "clean"
-    assert downgrade("needs_further_processing", [], True) == "needs_further_processing"
-    assert downgrade("indeterminate", [], True) == "indeterminate"
-    print("  ok  complete+empty -> clean, incomplete+empty -> submit")
+    submit_incomplete, reason_incomplete = gate.base_gate_decision(
+        "needs_further_processing", has_actionable=False, incomplete=True)
+    assert submit_incomplete == "submit" and reason_incomplete == "INCOMPLETE_SCAN"
+
+    submit_indet, _ = gate.base_gate_decision(
+        "indeterminate", has_actionable=False, incomplete=True)
+    assert submit_indet == "submit"
+    print("  ok  complete below-floor withholds by policy (not clean); "
+          "incomplete submits")
 
 
 def run_hash_swap():

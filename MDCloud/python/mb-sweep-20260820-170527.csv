@@ -1,0 +1,1 @@
+sha256,first_seen,day,file_type,file_size,mb_signature,mb_tags,mdc_verdict,mdc_threat_level,caught,chain_depth,multiscan_overall,multiscan_detected,multiscan_total,signal_groups,yara_matches,mdc_tags,ioc_count,error
